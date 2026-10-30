@@ -17,6 +17,7 @@
  *   node tools/try-tool.cjs --category 手机        # 只申请手机类（按京东类目 cid1=9987 手机通讯）
  *   node tools/try-tool.cjs --keyword 一加,OPPO    # 只申请标题/品牌/店铺含这些词的商品
  *   node tools/try-tool.cjs --cid1 9987,652        # 自定义类目 id 过滤
+ *   node tools/try-tool.cjs --aid 503744764         # 定向申请：直接给试用商品的活动 ID（可逗号分隔多个）
  *
  * 支持的 --category 名称：手机/phone（cid1=9987 手机通讯）、耳机/audio（652）、
  * 电脑/computer（670）、母婴/baby（1319 的部分 cid2，不精确、建议用 --keyword）、
@@ -29,6 +30,7 @@
  *   JD_TRY_CID1          等同于 --cid1
  *   JD_TRY_APPLYNUMFILTER 申请人数超过该值就不申请（默认 200000，基本等于不限制）
  *   JD_TRY_GAP           两次申请之间等待秒数（默认 8）
+ *   JD_TRY_AID           等同于 --aid（定向申请的活动 ID，逗号分隔）
  */
 const fs = require('fs');
 const path = require('path');
@@ -381,6 +383,11 @@ async function main() {
   const maxIdx = argv.findIndex((a) => a === '--max');
   const maxApply = maxIdx >= 0 ? Number(argv[maxIdx + 1]) : Number(process.env.JD_TRY_MAXLENGTH || 5);
   const gap = Number(process.env.JD_TRY_GAP || 8) * 1000;
+  // 定向申请：--aid / JD_TRY_AID 直接给活动 ID，跳过抓首屏（用于 App 里看到的商品）
+  const aidsArg = String((() => {
+    const i = argv.findIndex((a) => a === '--aid');
+    return i >= 0 ? argv[i + 1] || '' : '';
+  })() || process.env.JD_TRY_AID || '').trim();
 
   const argList = (name) => {
     const i = argv.findIndex((a) => a === name);
@@ -416,11 +423,33 @@ async function main() {
   if (keywords.length) log(`关键词过滤：${keywords.join(',')}（匹配标题/品牌/店铺）`);
   await loadEid(cookie);
 
-  const items = await fetchTrialFeed(url, { cid1s, keywords, titleFilters });
-  log(`活动页商品：${items.length} 个（已过滤过期/无货/黑名单${items.skippedByFilter ? `，条件外 ${items.skippedByFilter} 个` : ''}）`);
-  items.slice(0, 20).forEach((it, i) => {
-    log(`  ${i + 1}. ${it.title} | 品牌 ${it.brand || '-'} | 类目 cid1=${it.cid1} | 价 ¥${it.jdPrice} | 份数 ${it.supplyNum} | 已申请 ${it.applyNum} 人 | 截止 ${it.endTime}`);
-  });
+  // 定向申请：给的 activityId 直接构造商品项，不需要抓首屏
+  const aids = splitList(aidsArg).filter((x) => /^\d+$/.test(x));
+  let items;
+  if (aids.length) {
+    log(`定向申请：activityId = ${aids.join(', ')}（跳过抓取首屏）`);
+    items = aids.map((aid) => ({
+      aid,
+      sku: '',
+      title: `activityId=${aid}`,
+      brand: '',
+      shop: '',
+      cid1: '',
+      cid2: '',
+      supplyNum: 0,
+      applyNum: 0,
+      jdPrice: '-',
+      endTime: '-',
+      end: null,
+      stock: true,
+    }));
+  } else {
+    items = await fetchTrialFeed(url, { cid1s, keywords, titleFilters });
+    log(`活动页商品：${items.length} 个（已过滤过期/无货/黑名单${items.skippedByFilter ? `，条件外 ${items.skippedByFilter} 个` : ''}）`);
+    items.slice(0, 20).forEach((it, i) => {
+      log(`  ${i + 1}. ${it.title} | ID=${it.aid} | 品牌 ${it.brand || '-'} | 类目 cid1=${it.cid1} | 价 ¥${it.jdPrice} | 份数 ${it.supplyNum} | 已申请 ${it.applyNum} 人 | 截止 ${it.endTime}`);
+    });
+  }
   if (!items.length) {
     log('没有可申请的商品，结束（可能活动改版，改 --url 试试）');
     return 0;
@@ -448,12 +477,12 @@ async function main() {
       if (attempts >= maxApply) break;
       if (q && Number(q.remainingNum) > 0 && done >= Number(q.remainingNum) && !force) break;
       attempts++;
-      log(`申请：${item.title}（activityId=${item.aid}）`);
+      log(item.title === `activityId=${item.aid}` ? `申请：activityId=${item.aid}` : `申请：${item.title}（activityId=${item.aid}）`);
       try {
         const r = await applyOne(cookie, item);
         if (r.ok) {
           done++;
-          log(`  ✓ 申请成功（${item.sku}）`);
+          log(`  ✓ 申请成功${item.sku ? `（${item.sku}）` : ''}`);
         } else if (String(r.code) === '-311') {
           log(`  × 额度已满：${r.message}`);
           if (!force) break;
@@ -478,31 +507,9 @@ async function main() {
   }
 }
 
-if (require.main === module) {
-  main()
-    .then((code) => process.exit(code || 0))
-    .catch((e) => {
-      console.error('试用工具出错：' + e.message);
-      process.exit(2);
-    });
-}
-
-// 供 tools/try-watch.cjs（盯盘）复用
-module.exports = {
-  ROOT,
-  TRIAL_URL,
-  CATEGORY_PRESETS,
-  loadEnv,
-  log,
-  sleep,
-  fetchTrialFeed,
-  ensureH5stServer,
-  cookieOf,
-  loadEid,
-  quota,
-  applyOne,
-  resolveCid1,
-  setPin(pin) {
-    PIN = pin;
-  },
-};
+main()
+  .then((code) => process.exit(code || 0))
+  .catch((e) => {
+    console.error('试用工具出错：' + e.message);
+    process.exit(2);
+  });

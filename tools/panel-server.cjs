@@ -180,18 +180,27 @@ const TARGETS = {
   weekend: { label: '跑周末（1 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'weekly']] },
   'try-phone-dry': { label: '手机试用：只看不申请', cmd: [NODE, [path.join(ROOT, 'tools', 'run-try.cjs'), '--category', 'phone', '--dry-run']] },
   'try-phone': { label: '手机试用：申请', cmd: [NODE, [path.join(ROOT, 'tools', 'run-try.cjs'), '--category', 'phone']] },
-  'try-watch-dry': { label: '手机试用：盯盘单查（不申请）', cmd: [NODE, [path.join(ROOT, 'tools', 'try-watch.cjs'), '--once', '--dry-run']] },
-  'try-watch': { label: '手机试用：盯盘（自动申请）', cmd: [NODE, [path.join(ROOT, 'tools', 'try-watch.cjs'), '--hours', String(process.env.JD_TRY_WATCH_HOURS || 12)]] },
+  'try-aid': { label: '定向申请（填试用 ID）', cmd: null },
   'get-cookie': { label: '刷新 Cookie（弹出京东扫码）', cmd: [NODE, [path.join(ROOT, 'tools', 'get-cookie.mjs'), '--wait', '300']] },
 };
 
-function startTarget(target) {
+function startTarget(target, extra = {}) {
   if (state.current && state.current.finishedAt == null) {
     return { ok: false, message: '已有任务在跑，先等它结束或点「停止」' };
   }
   const def = TARGETS[target];
   if (!def) return { ok: false, message: '未知任务：' + target };
-  const [bin, args] = def.cmd;
+  let cmd;
+  if (target === 'try-aid') {
+    const aid = String(extra.aid || '').trim();
+    if (!/^[0-9]+([,\s]+[0-9]+)*$/.test(aid)) {
+      return { ok: false, message: 'ID 只能是数字，多个用逗号分隔（例：503744764,503748241）' };
+    }
+    cmd = [NODE, [path.join(ROOT, 'tools', 'run-try.cjs'), '--aid', aid]];
+  } else {
+    cmd = def.cmd;
+  }
+  const [bin, args] = cmd;
   const child = spawn(bin, args, { cwd: ROOT, env: process.env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   const run = {
     id: Date.now(),
@@ -284,7 +293,7 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === '/api/run' && req.method === 'POST') {
       const body = await readBody(req);
-      return json(res, 200, startTarget(String(body.target || '')));
+      return json(res, 200, startTarget(String(body.target || ''), body.args || {}));
     }
 
     if (url.pathname === '/api/stop' && req.method === 'POST') {
@@ -424,12 +433,12 @@ const HTML = `<!doctype html>
       <button data-run="weekend">跑周末</button>
       <button data-run="try-phone-dry">手机试用：只看</button>
       <button class="primary" data-run="try-phone">手机试用：申请</button>
-      <button data-run="try-watch-dry">手机试用：盯盘单查</button>
-      <button data-run="try-watch" title="每 10 分钟抓一次首屏，发现新上架的目标商品就用剩余额度申请；会一直占用任务队列，直到额度用完或点「停止」">手机试用：盯盘</button>
+      <input id="aidInput" placeholder="试用 ID，如 503744764（多个用逗号）" style="padding:7px 9px;border:1px solid #cdd5df;border-radius:6px;font-size:13px;min-width:250px">
+      <button data-run="try-aid">定向申请</button>
       <button data-run="get-cookie">刷新 Cookie（扫码）</button>
       <button id="stopBtn">停止</button>
     </div>
-    <div class="small muted" style="margin-top:8px">提示：任务在后台串行执行，一次只能跑一个；输出会实时显示在下面。「盯盘」会长时间占用队列（默认 12 小时），不盯了就点「停止」。</div>
+    <div class="small muted" style="margin-top:8px">提示：任务在后台串行执行，一次只能跑一个；输出会实时显示在下面。</div>
   </div>
 
   <div class="card full" style="margin-top:12px">
@@ -567,9 +576,17 @@ document.addEventListener('click', async (ev) => {
 
   if (t.dataset.run) {
     const target = t.dataset.run;
+    let args = {};
+    if (target === 'try-aid') {
+      const el = document.getElementById('aidInput');
+      const aid = String((el && el.value) || '').trim();
+      if (!aid) { toast('先在上面填试用商品 ID（activityId）'); return; }
+      if (!/^[0-9]+([,\s]+[0-9]+)*$/.test(aid)) { toast('ID 只能是数字，多个用逗号分隔'); return; }
+      args = { aid };
+    }
     if (target === 'get-cookie' && !confirm('会打开一个独立 Edge 窗口让你扫码；扫完点确认后会自动写回 .env。继续？')) return;
     t.disabled = true;
-    const r = await post('/api/run', { target });
+    const r = await post('/api/run', { target, args });
     toast(r.ok ? '已启动：' + target : r.message);
     t.disabled = false;
     refresh();

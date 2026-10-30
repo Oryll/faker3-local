@@ -19,7 +19,6 @@
 | `install-schedule.cmd` / `remove-schedule.cmd` | 注册/删除 Windows 每日计划任务 |
 | `panel.cmd` / `tools/panel-server.cjs` | **本地管理面板**：浏览器里看账号/京豆/额度、点按钮跑任务、看日志、注册计划任务（第 12 节） |
 | `try.cmd` / `try-phone.cmd` / `tools/try-tool.cjs` | 京东试用：抓活动页商品 → 本地签名 → 提交申请（第 11 节） |
-| `try-watch.cmd` / `tools/try-watch.cjs` | 京东试用**盯盘**：定时抓首屏，发现新上架商品就用剩余额度申请（第 11 节） |
 | `tools/analyze-deps.js` | 依赖分析小工具（看某脚本用到哪些 npm 包） |
 | `tools/check-deps.js` | 静态检查所有脚本的依赖是否装齐：`node tools/check-deps.js [--all]` |
 | `.gitignore` | 忽略 `node_modules/`、`.env`、`.jd-profile/`、日志、缓存 |
@@ -269,6 +268,11 @@ try.cmd --upstream         :: 跑上游原版 jd_try.js（对照用，基本拿�
 try.cmd --category phone --dry-run   :: 只看今天有哪些手机试用
 try-phone.cmd                        :: 把今天的额度全用在手机上
 try.cmd --category phone --max 5     :: 同上，显式指定最多 5 个
+
+:: 定向申请（在京东 App/网页看到想要的试用商品，把活动 ID 填进去直接申请）
+try.cmd --aid 503744764                  :: 申请单个
+try.cmd --aid 503744764,503748241        :: 一次申请多个
+try.cmd --aid 503744764 --dry-run        :: 只看会不会提交
 try.cmd --keyword 一加,OPPO          :: 按标题/品牌/店铺关键词过滤
 try.cmd --cid1 9987,652              :: 按京东一级类目 id 过滤（9987=手机通讯，652=影音娱乐）
 ```
@@ -304,26 +308,6 @@ try.cmd --cid1 9987,652              :: 按京东一级类目 id 过滤（9987=�
 - 每天想自动跑：`schtasks` 里再加一条 `try-phone.cmd`（建议 00:05，额度一过 0 点就重置），例如：
   `schtasks /Create /TN "Faker3-Try-Phone" /TR "\"D:\gongzuoqu\faker3-local\try-phone.cmd\"" /SC DAILY /ST 00:05 /F`
 
-### 盯盘：把每天 5 次额度尽量用满（`try-watch.cmd`）
-
-活动页首屏一次只给十几个商品（当前 13 个），手机类通常 1~3 部；但**页面全天会陆续上新品**（实测：2026-10-30 白天 12 个，晚上变成 13 个）。列表接口被京东锁了（换 tab/翻页恒 403），所以做法是「反复抓首屏 + 记住已申请的 activityId」：
-
-```
-try-watch.cmd                     # 手机类，每 10 分钟看一次，最多盯 12 小时
-try-watch.cmd --dry-run           # 只看会申请哪些，不提交
-try-watch.cmd --once              # 只抓一轮（抽查用）
-try-watch.cmd --interval 300      # 每 5 分钟看一次
-try-watch.cmd --hours 6           # 只盯 6 小时
-try-watch.cmd --max 3             # 本次最多提交 3 个
-try-watch.cmd --category 手机,耳机   # 盯多个类目
-try-watch.cmd --keyword 一加,OPPO   # 盯关键词
-```
-
-- 发现「没申请过的新商品」才提交；同一天内不会重复申请同一个 activityId（记录在 `logs/try-applied.json`）。
-- 当日额度为 0 时自动停止；cookie 失效（返回 -600）也会自动停下并提示去跑 `get-cookie.cmd`。
-- 相关环境变量：`JD_TRY_WATCH_INTERVAL`（默认 600 秒）、`JD_TRY_WATCH_HOURS`（默认 12 小时）。
-- 提醒：**额度每天清零、不会累积**，别为了凑次数申请不需要的东西；盯盘只是在「新手机出现」时帮你抓住。
-
 ## 12. 管理面板（`panel.cmd`，浏览器里点鼠标）
 
 不想记命令时用这个：双击 `panel.cmd`，会自动打开浏览器到 <http://127.0.0.1:7373>（只监听本机，
@@ -336,7 +320,7 @@ try-watch.cmd --keyword 一加,OPPO   # 盯关键词
 | 账号 | 显示当前 Cookie 里的 `pin`、Cookie 段数/字符数、`.env` 最后修改时间，并标注是「新式登录态」还是「老式 pt_key」 |
 | 当前京豆 | 取最近一次「检查账号」的输出（`517 豆`、变动值）；数据缓存在 `logs/panel-state.json` |
 | 试用额度 | 取最近一次试用任务的输出（今日已申请 / 剩余次数） |
-| 操作 | 检查账号、跑日常（13 个）、跑额外（24 个）、跑周末、手机试用（只看 / 申请）、**手机试用盯盘（单查 / 自动申请）**、刷新 Cookie（弹出的 Edge 窗口里扫码）、停止 |
+| 操作 | 检查账号、跑日常（13 个）、跑额外（24 个）、跑周末、手机试用（只看 / 申请）、**定向申请（输入框填 ID）**、刷新 Cookie（弹出的 Edge 窗口里扫码）、停止 |
 | 运行输出 | 后台任务实时输出（任务串行，一次一个），结束后保留退出码 |
 | 计划任务 | 一键注册/删除 `Faker3-Daily`（08:30）和 `Faker3-Try-Phone`（00:05） |
 | 日志 | 下拉选择 `logs/*.log` 直接看最近 300 行 |

@@ -507,9 +507,21 @@ async function main() {
   }
 }
 
-main()
-  .then((code) => process.exit(code || 0))
-  .catch((e) => {
-    console.error('试用工具出错：' + e.message);
-    process.exit(2);
-  });
+if (require.main === module) {
+  main()
+    .then((code) => process.exit(code || 0))
+    .catch((e) => {
+      console.error('试用工具出错：' + e.message);
+      process.exit(2);
+    });
+}
+
+// 供管理面板读取试用商品列表
+module.exports = {
+  ROOT,
+  TRIAL_URL,
+  CATEGORY_PRESETS,
+  loadEnv,
+  fetchTrialFeed,
+  resolveCid1,
+};

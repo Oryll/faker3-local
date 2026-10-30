@@ -17,6 +17,7 @@ const PORT = Number(process.env.PANEL_PORT || 7373);
 const NODE = process.execPath;
 const TASK_NAME = 'Faker3-Daily';
 const TRY_TASK_NAME = 'Faker3-Try-Phone';
+const tryTool = require('./try-tool.cjs');
 
 const state = {
   current: null, // { id, target, label, child, output: [], startedAt, finishedAt, exitCode }
@@ -289,6 +290,37 @@ async function apiState() {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   try {
+    if (url.pathname === '/api/trial') {
+      try {
+        tryTool.loadEnv();
+        const cat = String(url.searchParams.get('category') || 'all');
+        let cid1s = [];
+        if (cat && cat !== 'all') {
+          const r = tryTool.resolveCid1([cat]);
+          if (!r) return json(res, 400, { ok: false, message: '未知类目：' + cat });
+          cid1s = r;
+        }
+        const items = await tryTool.fetchTrialFeed(tryTool.TRIAL_URL, { cid1s, keywords: [], titleFilters: [] });
+        return json(res, 200, {
+          ok: true,
+          category: cat,
+          items: items.map((it) => ({
+            id: it.aid,
+            title: it.title,
+            brand: it.brand,
+            cid1: it.cid1,
+            price: it.jdPrice,
+            applyNum: it.applyNum,
+            supplyNum: it.supplyNum,
+            endTime: it.endTime,
+          })),
+          total: items.length,
+          fetchedAt: Date.now(),
+        });
+      } catch (e) {
+        return json(res, 500, { ok: false, message: '抓取失败：' + e.message });
+      }
+    }
     if (url.pathname === '/api/state') return json(res, 200, await apiState());
 
     if (url.pathname === '/api/run' && req.method === 'POST') {
@@ -439,6 +471,19 @@ const HTML = `<!doctype html>
       <button id="stopBtn">停止</button>
     </div>
     <div class="small muted" style="margin-top:8px">提示：任务在后台串行执行，一次只能跑一个；输出会实时显示在下面。</div>
+  </div>
+
+  <div class="card full" style="margin-top:12px">
+    <h2>试用商品（可复制 ID 直接申请）</h2>
+    <div class="row">
+      <select id="trialCat">
+        <option value="phone">只看手机类</option>
+        <option value="all">全部类目</option>
+      </select>
+      <button id="trialRefresh">刷新商品列表</button>
+      <span class="small muted" id="trialMeta">点「刷新商品列表」从京东试用活动页读取</span>
+    </div>
+    <div id="trialList" class="small" style="margin-top:10px"></div>
   </div>
 
   <div class="card full" style="margin-top:12px">
@@ -607,6 +652,37 @@ document.addEventListener('click', async (ev) => {
     return;
   }
 
+  if (t.dataset.copyid) {
+    const id = t.dataset.copyid;
+    try {
+      await navigator.clipboard.writeText(id);
+      toast('已复制 ID：' + id);
+    } catch {
+      const el = $('aidInput');
+      if (el) { el.value = id; el.focus(); }
+      toast('已填入输入框：' + id);
+    }
+    return;
+  }
+
+  if (t.dataset.applyid) {
+    const id = t.dataset.applyid;
+    const el = $('aidInput');
+    if (el) el.value = id;
+    if (!confirm('确认对 activityId=' + id + ' 提交试用申请？（消耗当天 1 次额度）')) return;
+    t.disabled = true;
+    const r = await post('/api/run', { target: 'try-aid', args: { aid: id } });
+    toast(r.ok ? '已提交申请任务：' + id : r.message);
+    t.disabled = false;
+    refresh();
+    return;
+  }
+
+  if (t.id === 'trialRefresh') {
+    loadTrial();
+    return;
+  }
+
   if (t.id === 'logBtn' || t.id === 'logRefresh') {
     const name = $('logSelect').value;
     if (!name) return toast('还没有日志');
@@ -617,7 +693,51 @@ document.addEventListener('click', async (ev) => {
   }
 });
 
+async function loadTrial() {
+  const cat = $('trialCat').value;
+  $('trialMeta').textContent = '正在读取活动页…';
+  $('trialList').innerHTML = '';
+  try {
+    const r = await fetch('/api/trial?category=' + encodeURIComponent(cat));
+    const j = await r.json();
+    if (!j.ok) {
+      $('trialMeta').textContent = j.message || '读取失败';
+      return;
+    }
+    $('trialMeta').textContent = '共 ' + j.total + ' 个在架商品（' + fmtTime(j.fetchedAt) + ' 读取；活动页首屏，换类目也只会给这一批）';
+    if (!j.items.length) {
+      $('trialList').innerHTML = '<div class="muted">没有符合条件且在架的商品</div>';
+      return;
+    }
+    const rows = j.items
+      .map(
+        (it) =>
+          '<tr>' +
+          '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5">' + (it.title || '-') + '</td>' +
+          '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5;font-family:Consolas,monospace">' + it.id + '</td>' +
+          '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5">¥' + (it.price ?? '-') + '</td>' +
+          '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5">' + (it.applyNum ?? '-') + ' 人</td>' +
+          '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5">' + (it.endTime || '-') + '</td>' +
+          '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5;white-space:nowrap">' +
+          '<button data-copyid="' + it.id + '" style="padding:3px 8px;font-size:12px">复制ID</button> ' +
+          '<button data-applyid="' + it.id + '" style="padding:3px 8px;font-size:12px;background:#e8453c;color:#fff;border-color:#e8453c">申请</button>' +
+          '</td>' +
+          '</tr>'
+      )
+      .join('');
+    $('trialList').innerHTML =
+      '<table style="width:100%;border-collapse:collapse">' +
+      '<thead><tr style="text-align:left;color:#6b7280">' +
+      '<th style="padding:6px 10px">商品</th><th style="padding:6px 10px">活动ID</th><th style="padding:6px 10px">京东价</th>' +
+      '<th style="padding:6px 10px">已申请</th><th style="padding:6px 10px">截止时间</th><th style="padding:6px 10px">操作</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table>';
+  } catch (e) {
+    $('trialMeta').textContent = '读取失败：' + e.message;
+  }
+}
+
 refresh();
+loadTrial();
 </script>
 </body>
 </html>`;

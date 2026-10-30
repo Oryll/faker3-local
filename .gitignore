@@ -1,0 +1,13 @@
+# 本地运行产物，不要提交
+node_modules/
+logs/
+.env
+
+# get-cookie.cmd 专用的独立浏览器配置（里面含登录 cookie，绝对不能提交）
+.jd-profile/
+
+# 脚本运行时生成的缓存
+BeanCache/
+bean_helpcode
+20[0-9][0-9]-[0-9][0-9]-[0-9][0-9].json
+*.log

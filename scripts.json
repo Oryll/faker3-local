@@ -1,0 +1,75 @@
+{
+  "settings": {
+    "gapSeconds": 6,
+    "timeoutSeconds": 240
+  },
+  "groups": {
+    "daily": [
+      "jd_bean_change.js",
+      "jd_daka_bean.js",
+      "jd_signbeanact_.js",
+      "jd_bean_home.js",
+      "jd_plantBean.js",
+      "jd_plantBean_friend.js",
+      "jd_fruit_new.js",
+      "jd_water_new.js",
+      "jd_newfarmlottery.js",
+      "jd_AutoEval.js",
+      "jd_mall.js",
+      "jd_ttgd.js",
+      "jd_qy_sign.js"
+    ],
+    "weekly": [
+      "jd_clean_coupon.js"
+    ],
+    "extra": [
+      "jd_jrttlqy.js",
+      "jd_pkabeans.js",
+      "jd_jrddzjd.js",
+      "jd_hdyxzd.js",
+      "jd_weGameLottery.js",
+      "jd_superRedBagDraw.js",
+      "jd_lmdraw.js",
+      "jd_sldraw.js",
+      "jd_ifdraw.js",
+      "jd_luckyDraw.js",
+      "jd_xqmh.js",
+      "jd_vu50.js",
+      "jd_wduoyu.js",
+      "jd_jingpai.js",
+      "jd_rankVote.js",
+      "jd_joypark_leave.js",
+      "jd_dpqd_sign.js",
+      "jd_dwapp.js",
+      "jd_OnceApply.js",
+      "jd_hssign.js",
+      "jd_yssign.js",
+      "jd_zjindan.js",
+      "jd_ksjsb.js",
+      "jd_CheckCK.js"
+    ],
+    "help": [
+      "jd_farmnew_ck_help.js",
+      "jd_farmnew_code_help.js",
+      "jd_fish_help.js",
+      "jd_plantBean_help.js",
+      "jd_sx_help.js"
+    ],
+    "stale": [
+      "jd_dplh0408.js",
+      "jd_dplh0420.js",
+      "jd_dplh0509.js",
+      "jd_dplh0523.js",
+      "jd_dplh0609.js",
+      "jd_lhgz0408.js"
+    ],
+    "tools": [
+      "jd_indeps.js",
+      "jd_autock.js",
+      "jd_proxy_check.js"
+    ],
+    "special": [
+      "jd_try.js"
+    ]
+  }
+}

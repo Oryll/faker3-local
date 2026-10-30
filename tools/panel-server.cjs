@@ -180,6 +180,8 @@ const TARGETS = {
   weekend: { label: '跑周末（1 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'weekly']] },
   'try-phone-dry': { label: '手机试用：只看不申请', cmd: [NODE, [path.join(ROOT, 'tools', 'run-try.cjs'), '--category', 'phone', '--dry-run']] },
   'try-phone': { label: '手机试用：申请', cmd: [NODE, [path.join(ROOT, 'tools', 'run-try.cjs'), '--category', 'phone']] },
+  'try-watch-dry': { label: '手机试用：盯盘单查（不申请）', cmd: [NODE, [path.join(ROOT, 'tools', 'try-watch.cjs'), '--once', '--dry-run']] },
+  'try-watch': { label: '手机试用：盯盘（自动申请）', cmd: [NODE, [path.join(ROOT, 'tools', 'try-watch.cjs'), '--hours', String(process.env.JD_TRY_WATCH_HOURS || 12)]] },
   'get-cookie': { label: '刷新 Cookie（弹出京东扫码）', cmd: [NODE, [path.join(ROOT, 'tools', 'get-cookie.mjs'), '--wait', '300']] },
 };
 
@@ -422,10 +424,12 @@ const HTML = `<!doctype html>
       <button data-run="weekend">跑周末</button>
       <button data-run="try-phone-dry">手机试用：只看</button>
       <button class="primary" data-run="try-phone">手机试用：申请</button>
+      <button data-run="try-watch-dry">手机试用：盯盘单查</button>
+      <button data-run="try-watch" title="每 10 分钟抓一次首屏，发现新上架的目标商品就用剩余额度申请；会一直占用任务队列，直到额度用完或点「停止」">手机试用：盯盘</button>
       <button data-run="get-cookie">刷新 Cookie（扫码）</button>
       <button id="stopBtn">停止</button>
     </div>
-    <div class="small muted" style="margin-top:8px">提示：任务在后台串行执行，一次只能跑一个；输出会实时显示在下面。</div>
+    <div class="small muted" style="margin-top:8px">提示：任务在后台串行执行，一次只能跑一个；输出会实时显示在下面。「盯盘」会长时间占用队列（默认 12 小时），不盯了就点「停止」。</div>
   </div>
 
   <div class="card full" style="margin-top:12px">

@@ -179,8 +179,7 @@ const TARGETS = {
   daily: { label: '跑日常（13 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'daily']] },
   extra: { label: '跑额外（24 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'extra']] },
   weekend: { label: '跑周末（1 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'weekly']] },
-  'try-phone-dry': { label: '手机试用：只看不申请', cmd: [NODE, [path.join(ROOT, 'tools', 'run-try.cjs'), '--category', 'phone', '--dry-run']] },
-  'try-phone': { label: '手机试用：申请', cmd: [NODE, [path.join(ROOT, 'tools', 'run-try.cjs'), '--category', 'phone']] },
+  'try-phone': { label: '试用：一键申请全部手机类', cmd: [NODE, [path.join(ROOT, 'tools', 'run-try.cjs'), '--category', 'phone']] },
   'try-aid': { label: '定向申请（填试用 ID）', cmd: null },
   'get-cookie': { label: '刷新 Cookie（弹出京东扫码）', cmd: [NODE, [path.join(ROOT, 'tools', 'get-cookie.mjs'), '--wait', '300']] },
 };
@@ -463,10 +462,6 @@ const HTML = `<!doctype html>
       <button data-run="daily">跑日常（13 个）</button>
       <button data-run="extra">跑额外（24 个）</button>
       <button data-run="weekend">跑周末</button>
-      <button data-run="try-phone-dry">手机试用：只看</button>
-      <button class="primary" data-run="try-phone">手机试用：申请</button>
-      <input id="aidInput" placeholder="试用 ID，如 503744764（多个用逗号）" style="padding:7px 9px;border:1px solid #cdd5df;border-radius:6px;font-size:13px;min-width:250px">
-      <button data-run="try-aid">定向申请</button>
       <button data-run="get-cookie">刷新 Cookie（扫码）</button>
       <button id="stopBtn">停止</button>
     </div>
@@ -481,7 +476,13 @@ const HTML = `<!doctype html>
         <option value="all">全部类目</option>
       </select>
       <button id="trialRefresh">刷新商品列表</button>
+      <button class="primary" data-run="try-phone">一键申请全部手机</button>
       <span class="small muted" id="trialMeta">点「刷新商品列表」从京东试用活动页读取</span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="aidInput" placeholder="试用 ID，如 503744764（多个用逗号）" style="padding:7px 9px;border:1px solid #cdd5df;border-radius:6px;font-size:13px;min-width:250px">
+      <button data-run="try-aid">定向申请</button>
+      <span class="small muted">表格里没有的商品（比如 App 里看到的），可以在这里填 ID 直接申请</span>
     </div>
     <div id="trialList" class="small" style="margin-top:10px"></div>
   </div>

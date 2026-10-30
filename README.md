@@ -1,68 +1,111 @@
-## 仓库说明
-### 锄禾日当午，汗滴禾下土
+# faker3 本地化运行版（Windows）
 
-Faker自用仓库。本地秘钥计算方法，保证账户信息安全。已适配Spy插件24小时全天监控。
+把 [shufflewzc/faker3](https://github.com/shufflewzc/faker3) 这套**青龙面板脚本**，做成 Windows 上双击就能跑的本地版：
+不用装青龙、不用 Docker，补上了依赖、配置、运行器、Cookie 自动获取、图形面板和几个修好的功能。
 
-* 推荐配合无界使用
-* 自有拉库代理
-* 每日保持更新
+> **说明**：本仓库是个人学习/自用备份，上游代码版权归原作者所有，且上游**没有开源许可证**。
+> 公开此仓库仅为便于个人备份与查看，**请勿商用、请勿大范围传播**；如果原作者要求，会立即删除。
 
-### 注意
-为了可以完美使用本库，请使用一键安装脚本安装青龙，请按照教程链接进行配置。
+---
 
-【一键脚本】
-https://thin-hill-428.notion.site/Faker-QL-pannel-Faker-Repository-environment-Setup-45edcbfe90d74d8abb2d71896eab3be7
+## 为什么有这么一个仓库
 
-##  日常签到版
+上游仓库是给青龙面板用的，直接克隆下来跑会遇到三个坑：
 
-日常签到，仅包含少量日常任务签到版本。安静挂机。
+1. **没有 `package.json`** —— 直接 `node jd_xxx.js` 报 `Cannot find module 'got'`，要手工装 25 个依赖；
+2. **不读 `.env`** —— 它靠环境变量 `JD_COOKIE`，本地跑要自己注入；
+3. **2026 年京东网页登录不再下发 `pt_key`** —— 很多脚本开头用老接口自检 Cookie，直接判定「CK 已失效」，0.3 秒空转退出，看起来什么都没干。
 
-#### [点击直达频道获得更多使用教程](https://t.me/scriptalking)
+本仓库把这三件事都解决了，并且**没有改动任何一个上游 `jd_*.js`**（`git diff upstream/main -- 'jd_*.js'` 为空）。
 
-[![Anurag's GitHub stats](https://github-readme-stats.vercel.app/api?username=shufflewzc&bg_color=30,e96443,904e95&title_color=fff&text_color=fff)](https://github.com/anuraghazra/github-readme-stats)
+## 加了哪些东西
 
+| 文件 | 作用 |
+| --- | --- |
+| `run.js` / `run.cmd` / `scripts.json` | 本地运行器：读 `.env`、按分组跑、超时控制、结果汇总、写日志 |
+| `tools/compat-shim.cjs` | **兼容层**：绕过 `pt_key` 时代遗留的 `islogin` 自检，让脚本继续跑真实业务接口 |
+| `tools/get-cookie.mjs` / `get-cookie.cmd` | **自动取 Cookie**：弹一个专用 Edge 窗口扫码登录，把整套 cookie（含 HttpOnly）写进 `.env` |
+| `tools/panel-server.cjs` / `panel.cmd` | **本地管理面板**：<http://127.0.0.1:7373> 看账号/京豆/试用额度，点按钮跑任务、看日志、注册计划任务 |
+| `tools/try-tool.cjs` / `try.cmd` / `try-phone.cmd` | **京东试用**：解析活动页 SSR 商品数据 + 本地 h5st 签名 + 提交申请（可只申请手机类） |
+| `tools/local-h5st-server.cjs` | 本地 h5st 签名服务（试用脚本需要，自动拉起） |
+| `tools/check-deps.js` / `tools/analyze-deps.js` | 依赖检查/分析小工具 |
+| `package.json` / `pnpm-lock.yaml` | 25 个依赖，一条命令装齐 |
+| `.env.example` | 配置模板（Cookie、通知、代理、试用参数） |
+| `LOCAL-README.md` | 详细文档（12 节，含每个功能的原理、实测与限制） |
 
+## 环境要求
 
-【注意】拉库前请打开青龙面板-配置文件 GithubProxyUrl="" 双引号中的内容去掉。
+- Windows 10 / 11
+- Node.js 18+（实测 v24.21.0）；没装也行，`run.cmd` / `panel.cmd` 会自动探测常见安装路径
+- 一个京东账号（扫码或账号密码登录）
 
-Faker4
+## 五分钟上手
 
-ql repo https://git.metauniverse-cn.com/https://github.com/shufflewzc/faker4.git "jd_|jx_|gua_|jddj_|jdCookie" "activity|backUp" "^jd[^_]|USER|function|utils|sendNotify|ZooFaker_Necklace.js|JDJRValidator_|sign_graphics_validate|ql|JDSignValidator|magic|depend|h5sts" "main"
+```bat
+:: 1) 安装依赖（只需一次；pnpm / npm 都行）
+pnpm install
 
-【教程合集】
-[https://www.notion.so/Cent-OS-7-6-1c598629675145988b43a37998a1604a]()
+:: 2) 取 Cookie：弹出专用 Edge 窗口，用京东 App 扫码登录，自动写进 .env
+get-cookie.cmd
 
+:: 3) 验证 Cookie：能打印出京豆/会员信息就说明有效
+check-cookie.cmd
 
-## Special statement:
+:: 4) 跑每日组（13 个脚本，约 2 分钟）
+run.cmd --group daily
+```
 
-* Any unlocking and decryption analysis scripts involved in the Script project released by this warehouse are only used for testing, learning and research, and are forbidden to be used for commercial purposes. Their legality, accuracy, completeness and effectiveness cannot be guaranteed. Please make your own judgment based on the situation. .
+也可以直接双击 `panel.cmd` 打开管理面板，所有操作都有按钮。
 
-* All resource files in this project are forbidden to be reproduced or published in any form by any official account or self-media.
+## 管理面板
 
-* This warehouse is not responsible for any script problems, including but not limited to any loss or damage caused by any script errors.
+双击 `panel.cmd` → 自动打开 <http://127.0.0.1:7373>（只监听本机，零依赖，页面内嵌在 Node 里）。
 
-* Any user who indirectly uses the script, including but not limited to establishing a VPS or disseminating it when certain actions violate national/regional laws or related regulations, this warehouse is not responsible for any privacy leakage or other consequences caused by this.
+- 账号卡：`pin`、Cookie 段数/长度、`.env` 更新时间、登录态类型（新式 / 老式）
+- 数据：当前京豆、今日变动、试用额度（已申请 / 剩余）
+- 按钮：检查账号、跑日常、跑额外、跑周末、手机试用（只看 / 申请）、刷新 Cookie（扫码）、停止
+- 实时运行输出、日志查看、计划任务一键注册/删除
 
-* Do not use any content of the Script project for commercial or illegal purposes, otherwise you will be responsible for the consequences.
+## 常用命令
 
-* If any unit or individual believes that the script of the project may be suspected of infringing on their rights, they should promptly notify and provide proof of identity and ownership. We will delete the relevant script after receiving the certification document.
+| 命令 | 说明 |
+| --- | --- |
+| `run.cmd --list` | 列出所有分组和脚本（带中文名） |
+| `run.cmd --group daily` | 每日组（13 个） |
+| `run.cmd --group extra` | 额外组（24 个，活动类，受京东档期影响） |
+| `run.cmd --group weekly` | 每周组（清券） |
+| `run.cmd jd_bean_change.js` | 跑单个脚本 |
+| `run.cmd --group daily --dry-run` | 只预览不执行 |
+| `run.cmd --group daily --no-compat` | 关闭兼容层（回到上游原始行为） |
+| `get-cookie.cmd` | 重新扫码获取 Cookie |
+| `try-phone.cmd` | 申请试用（只筛手机类，`--dry-run` 只看不申请） |
+| `panel.cmd` | 打开管理面板 |
 
-* Anyone who views this item in any way or directly or indirectly uses any script of the Script item should read this statement carefully. This warehouse reserves the right to change or supplement this disclaimer at any time. Once you have used and copied any relevant scripts or rules of the Script project, you are deemed to have accepted this disclaimer.
+分组一览：`daily` 13、`weekly` 1、`extra` 24、`help` 5、`stale` 6、`tools` 3、`special` 1（`jd_try` 上游版，需外部签名服务，本仓库用 `try.cmd` 替代）。
 
- **You must completely delete the above content from your computer or mobile phone within 24 hours after downloading.**  </br>
-> ***You have used or copied any script made by yourself in this warehouse, it is deemed to have accepted this statement, please read it carefully*** 
+## 已知限制
 
+- **2026 年起京东网页登录不再下发 `pt_key`**：上游按老格式写的自检接口会恒判 Cookie 失效，
+  已由 `tools/compat-shim.cjs` 绕过；`jd_ttgd` / `jd_qy_sign` / `jd_dwapp` 等脚本背后的接口仍不认新 Cookie。
+- `jd_CheckCK.js` 恒定误报「已失效」（它只认 `pt_key`），已从每日组移出，用 `check-cookie.cmd` 代替。
+- 上游 `jd_try.js` 依赖的试用列表接口返回 **403**，本仓库改用「解析活动页服务端渲染数据 + 本地 h5st 签名」实现，见 `try.cmd`。
+- 试用每天有申请次数上限（通常 5 次），超额会返回「您的申请次数已超过上限」。
+- 活动类脚本依赖京东活动档期，过期的统一放在 `stale` 组。
+- 京东风控/接口随时可能变化，**不保证任何收益**。
 
-## Special thanks to:
+## 安全提醒
 
+- `.env` 和 `.jd-profile/` 里是**完整登录凭证**（`thor` / `light_key` / `sdtoken` / `pin`），
+  已加入 `.gitignore`，**永远不要提交、截图或发给别人**。
+- 本仓库上传前已清空 `.env`、删除浏览器配置目录，仓库内不含任何 Cookie。
+- 管理面板只监听 `127.0.0.1`，不对外网开放；但同一台电脑上的人可以打开它。
 
-* [@NobyDa](https://github.com/NobyDa)
-* [@chavyleung](https://github.com/chavyleung)
-* [@liuxiaoyucc](https://github.com/liuxiaoyucc)
-* [@Zero-S1](https://github.com/Zero-S1)
-* [@uniqueque](https://github.com/uniqueque)
-* [@nzw9314](https://github.com/nzw9314)
-* [@Andy Woo](https://t.me/update_help_group)「青龙互助研究院支持」
-* [@Oreo](https://github.com/Oreomeow) 「青龙Faker仓库一键安装配置」
+## 免责声明
 
-# 欢迎Pull Request！
+本项目仅为个人学习、自动化脚本研究之用。上游代码版权归 [shufflewzc/faker3](https://github.com/shufflewzc/faker3) 作者所有；
+使用自动化脚本可能违反京东用户协议并带来账号风险（限流、风控、黑号等），**一切后果自负**。
+如原作者认为本仓库不妥，请联系删除。
+
+## 详细文档
+
+- [`LOCAL-README.md`](LOCAL-README.md) —— 安装、Cookie、分组、定时任务、兼容层原理、试用实现、面板说明、排错

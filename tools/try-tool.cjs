@@ -478,9 +478,31 @@ async function main() {
   }
 }
 
-main()
-  .then((code) => process.exit(code || 0))
-  .catch((e) => {
-    console.error('试用工具出错：' + e.message);
-    process.exit(2);
-  });
+if (require.main === module) {
+  main()
+    .then((code) => process.exit(code || 0))
+    .catch((e) => {
+      console.error('试用工具出错：' + e.message);
+      process.exit(2);
+    });
+}
+
+// 供 tools/try-watch.cjs（盯盘）复用
+module.exports = {
+  ROOT,
+  TRIAL_URL,
+  CATEGORY_PRESETS,
+  loadEnv,
+  log,
+  sleep,
+  fetchTrialFeed,
+  ensureH5stServer,
+  cookieOf,
+  loadEid,
+  quota,
+  applyOne,
+  resolveCid1,
+  setPin(pin) {
+    PIN = pin;
+  },
+};

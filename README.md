@@ -27,6 +27,7 @@
 | `tools/get-cookie.mjs` / `get-cookie.cmd` | **自动取 Cookie**：弹一个专用 Edge 窗口扫码登录，把整套 cookie（含 HttpOnly）写进 `.env` |
 | `tools/panel-server.cjs` / `panel.cmd` | **本地管理面板**：<http://127.0.0.1:7373> 看账号/京豆/试用额度，点按钮跑任务、看日志、注册计划任务 |
 | `tools/try-tool.cjs` / `try.cmd` / `try-phone.cmd` | **京东试用**：解析活动页 SSR 商品数据 + 本地 h5st 签名 + 提交申请（可只申请手机类） |
+| `tools/try-watch.cjs` / `try-watch.cmd` | **试用盯盘**：定时抓首屏，发现新上架的目标类目商品就用剩余额度自动申请（每天额度 5 次，首屏只有十几个商品） |
 | `tools/local-h5st-server.cjs` | 本地 h5st 签名服务（试用脚本需要，自动拉起） |
 | `tools/check-deps.js` / `tools/analyze-deps.js` | 依赖检查/分析小工具 |
 | `package.json` / `pnpm-lock.yaml` | 25 个依赖，一条命令装齐 |
@@ -79,6 +80,7 @@ run.cmd --group daily
 | `run.cmd --group daily --no-compat` | 关闭兼容层（回到上游原始行为） |
 | `get-cookie.cmd` | 重新扫码获取 Cookie |
 | `try-phone.cmd` | 申请试用（只筛手机类，`--dry-run` 只看不申请） |
+| `try-watch.cmd` | 盯盘试用（默认手机类，每 10 分钟看一次，最多盯 12 小时） |
 | `panel.cmd` | 打开管理面板 |
 
 分组一览：`daily` 13、`weekly` 1、`extra` 24、`help` 5、`stale` 6、`tools` 3、`special` 1（`jd_try` 上游版，需外部签名服务，本仓库用 `try.cmd` 替代）。

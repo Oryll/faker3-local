@@ -19,6 +19,7 @@
 | `install-schedule.cmd` / `remove-schedule.cmd` | 注册/删除 Windows 每日计划任务 |
 | `panel.cmd` / `tools/panel-server.cjs` | **本地管理面板**：浏览器里看账号/京豆/额度、点按钮跑任务、看日志、注册计划任务（第 12 节） |
 | `try.cmd` / `try-phone.cmd` / `tools/try-tool.cjs` | 京东试用：抓活动页商品 → 本地签名 → 提交申请（第 11 节） |
+| `try-watch.cmd` / `tools/try-watch.cjs` | 京东试用**盯盘**：定时抓首屏，发现新上架商品就用剩余额度申请（第 11 节） |
 | `tools/analyze-deps.js` | 依赖分析小工具（看某脚本用到哪些 npm 包） |
 | `tools/check-deps.js` | 静态检查所有脚本的依赖是否装齐：`node tools/check-deps.js [--all]` |
 | `.gitignore` | 忽略 `node_modules/`、`.env`、`.jd-profile/`、日志、缓存 |
@@ -325,3 +326,24 @@ try.cmd --cid1 9987,652              :: 按京东一级类目 id 过滤（9987=�
 
 > 注意：面板进程关掉后网页就打不开了（重新双击 `panel.cmd` 即可）；想让「每天自动跑」不依赖面板，
 > 用第 4 节的计划任务或 `daily.cmd`。
+
+### 盯盘：把每天 5 次额度尽量用满（`try-watch.cmd`）
+
+活动页首屏一次只给十几个商品（当前 13 个），手机类通常 1~3 部；但**页面全天会陆续上新品**（实测：2026-10-30 白天 12 个，晚上变成 13 个）。列表接口被京东锁了（换 tab/翻页恒 403），所以做法是「反复抓首屏 + 记住已申请的 activityId」：
+
+```
+try-watch.cmd                     # 手机类，每 10 分钟看一次，最多盯 12 小时
+try-watch.cmd --dry-run           # 只看会申请哪些，不提交
+try-watch.cmd --once              # 只抓一轮（抽查用）
+try-watch.cmd --interval 300      # 每 5 分钟看一次
+try-watch.cmd --hours 6           # 只盯 6 小时
+try-watch.cmd --max 3             # 本次最多提交 3 个
+try-watch.cmd --category 手机,耳机   # 盯多个类目
+try-watch.cmd --keyword 一加,OPPO   # 盯关键词
+```
+
+- 发现「没申请过的新商品」才提交；同一天内不会重复申请同一个 activityId（记录在 `logs/try-applied.json`）。
+- 当日额度为 0 时自动停止；cookie 失效（返回 -600）也会自动停下并提示去跑 `get-cookie.cmd`。
+- 相关环境变量：`JD_TRY_WATCH_INTERVAL`（默认 600 秒）、`JD_TRY_WATCH_HOURS`（默认 12 小时）。
+- 提醒：**额度每天清零、不会累积**，别为了凑次数申请不需要的东西；盯盘只是在「新手机出现」时帮你抓住。
+

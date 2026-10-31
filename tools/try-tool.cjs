@@ -373,6 +373,56 @@ async function applyOne(cookie, item) {
   };
 }
 
+// ---------- 我的试用（try_MyTrials） ----------
+const MY_STATUS_TEXT = { 0: '已申请', 1: '即将揭晓', 2: '已中选', 3: '未中选' };
+function myStatusText(status) {
+  return MY_STATUS_TEXT[status] || '状态' + status;
+}
+
+function fmtMs(ms) {
+  if (!ms) return '-';
+  const d = new Date(Number(ms));
+  if (Number.isNaN(d.getTime())) return '-';
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+// selected: 0 已申请(等待开奖) / 1 即将揭晓 / 2 已中选 / 3 未中选
+async function fetchMyTrials(cookie, selected, maxPages = 6) {
+  const all = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const r = await jdApi(cookie, { functionId: 'try_MyTrials', appid: 'newtry', body: { page, selected, previewTime: '' } });
+    const j = r.json || {};
+    const ok = j.code == null || String(j.code) === '0';
+    if (!ok) break;
+    const list = (j.data && j.data.list) || [];
+    if (!list.length) break;
+    all.push(...list);
+    if (list.length < 12) break;
+  }
+  return all;
+}
+
+// 同一个 actId 可能同时出现在 selected=0（已申请）和 selected=1（即将揭晓）里，
+// 按「信息量」优先保留：已中选(2) > 未中选(3) > 即将揭晓(1) > 已申请(0)
+const MY_STATUS_PRIORITY = { 2: 4, 3: 3, 1: 2, 0: 1 };
+async function fetchAllMyTrials(cookie) {
+  const byActId = new Map();
+  for (const selected of [0, 1, 2, 3]) {
+    const list = await fetchMyTrials(cookie, selected);
+    for (const it of list) {
+      const key = String(it.actId);
+      const prev = byActId.get(key);
+      if (!prev || (MY_STATUS_PRIORITY[it.status] || 0) > (MY_STATUS_PRIORITY[prev.status] || 0)) {
+        byActId.set(key, { ...it, selected });
+      }
+    }
+  }
+  const out = [...byActId.values()];
+  out.sort((a, b) => (Number(b.applyTime) || 0) - (Number(a.applyTime) || 0));
+  return out;
+}
+
 // ---------- main ----------
 async function main() {
   const argv = process.argv.slice(2);
@@ -422,6 +472,28 @@ async function main() {
   if (cid1s.length) log(`类目过滤：cid1 = ${cid1s.join(',')}${categoryArg.length ? `（${categoryArg.join(',')}）` : ''}`);
   if (keywords.length) log(`关键词过滤：${keywords.join(',')}（匹配标题/品牌/店铺）`);
   await loadEid(cookie);
+
+  // 我的试用：--my-trials 列出已申请/中选情况（--selected 0|1|2|3|all，默认 all）
+  if (argv.includes('--my-trials')) {
+    const selArg = String(argList('--selected') || 'all');
+    const srv = await ensureH5stServer();
+    try {
+      const items = selArg === 'all' ? await fetchAllMyTrials(cookie) : await fetchMyTrials(cookie, Number(selArg));
+      const label = selArg === 'all' ? '全部' : myStatusText(Number(selArg));
+      if (!items.length) {
+        log('我的试用（' + label + '）：没有记录');
+        return 0;
+      }
+      log('我的试用（' + label + '）：共 ' + items.length + ' 条');
+      items.slice(0, 50).forEach((it, i) => {
+        const extra = it.text && it.text.text ? '（' + it.text.text + '）' : '';
+        log('  ' + (i + 1) + '. ' + (it.trialName || '-') + ' | ID=' + it.actId + ' | ' + myStatusText(it.status) + extra + ' | 申请 ' + fmtMs(it.applyTime));
+      });
+      return 0;
+    } finally {
+      for (const p of srv.procs) { try { p.kill(); } catch {} }
+    }
+  }
 
   // 定向申请：给的 activityId 直接构造商品项，不需要抓首屏
   const aids = splitList(aidsArg).filter((x) => /^\d+$/.test(x));
@@ -524,4 +596,18 @@ module.exports = {
   loadEnv,
   fetchTrialFeed,
   resolveCid1,
+  cookieOf,
+  loadEid,
+  ensureH5stServer,
+  quota,
+  applyOne,
+  sign,
+  jdApi,
+  fetchMyTrials,
+  fetchAllMyTrials,
+  myStatusText,
+  fmtMs,
+  setPin(pin) {
+    PIN = pin;
+  },
 };

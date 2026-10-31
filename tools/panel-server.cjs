@@ -289,6 +289,42 @@ async function apiState() {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   try {
+    if (url.pathname === '/api/my-trials') {
+      try {
+        tryTool.loadEnv();
+        const filter = String(url.searchParams.get('filter') || 'applied');
+        const { cookie, pin } = tryTool.cookieOf();
+        tryTool.setPin(pin);
+        await tryTool.loadEid(cookie);
+        const srv = await tryTool.ensureH5stServer();
+        let items = [];
+        try {
+          items = filter === 'success' ? await tryTool.fetchMyTrials(cookie, 2) : await tryTool.fetchAllMyTrials(cookie);
+        } finally {
+          for (const pr of srv.procs) { try { pr.kill(); } catch {} }
+        }
+        return json(res, 200, {
+          ok: true,
+          filter,
+          total: items.length,
+          items: items.map((it) => ({
+            id: it.actId,
+            title: it.trialName,
+            skuId: it.skuId,
+            status: it.status,
+            statusText: tryTool.myStatusText(it.status),
+            statusNote: it.text && it.text.text ? it.text.text : '',
+            applyTime: tryTool.fmtMs(it.applyTime),
+            endTime: tryTool.fmtMs(it.endTime),
+            img: it.trialImg,
+          })),
+          fetchedAt: Date.now(),
+        });
+      } catch (e) {
+        return json(res, 500, { ok: false, message: '查询失败：' + e.message });
+      }
+    }
+
     if (url.pathname === '/api/trial') {
       try {
         tryTool.loadEnv();
@@ -308,6 +344,7 @@ const server = http.createServer(async (req, res) => {
             title: it.title,
             brand: it.brand,
             cid1: it.cid1,
+            sku: it.sku,
             price: it.jdPrice,
             applyNum: it.applyNum,
             supplyNum: it.supplyNum,
@@ -470,6 +507,12 @@ const HTML = `<!doctype html>
 
   <div class="card full" style="margin-top:12px">
     <h2>试用商品（可复制 ID 直接申请）</h2>
+    <div class="row" style="margin-bottom:6px">
+      <button id="tabProducts" style="padding:4px 12px;font-size:12px;background:#e8453c;color:#fff;border-color:#e8453c">在架商品</button>
+      <button id="tabApplied" style="padding:4px 12px;font-size:12px">已申请</button>
+      <button id="tabSuccess" style="padding:4px 12px;font-size:12px">申请成功（已中选）</button>
+      <span class="small muted">「已申请」= 你在京东试用里的全部申请记录；「申请成功（已中选）」= 已经中选的</span>
+    </div>
     <div class="row">
       <select id="trialCat">
         <option value="phone">只看手机类</option>
@@ -680,7 +723,14 @@ document.addEventListener('click', async (ev) => {
   }
 
   if (t.id === 'trialRefresh') {
-    loadTrial();
+    if (TRIAL_MODE === 'products') {
+      APPLIED_IDS = null;
+      APPLIED_TITLES = null;
+      APPLIED_SKUS = null;
+      loadTrial();
+    } else {
+      loadMine(TRIAL_MODE);
+    }
     return;
   }
 
@@ -693,6 +743,95 @@ document.addEventListener('click', async (ev) => {
     return;
   }
 });
+
+let TRIAL_MODE = 'products';
+let APPLIED_IDS = null;
+let APPLIED_TITLES = null;
+let APPLIED_SKUS = null;
+function normTitle(t) {
+  return String(t || '').replace(/[\s\u3000]+/g, '').toLowerCase();
+}
+
+function paintTabs() {
+  const map = { products: 'tabProducts', applied: 'tabApplied', success: 'tabSuccess' };
+  for (const mode of Object.keys(map)) {
+    const b = $(map[mode]);
+    if (!b) continue;
+    const on = mode === TRIAL_MODE;
+    b.style.background = on ? '#e8453c' : '';
+    b.style.color = on ? '#fff' : '';
+    b.style.borderColor = on ? '#e8453c' : '';
+  }
+}
+
+async function loadAppliedIds() {
+  if (APPLIED_IDS) return APPLIED_IDS;
+  const ids = new Set();
+  const titles = new Set();
+  const skus = new Set();
+  try {
+    const r = await fetch('/api/my-trials?filter=applied');
+    const j = await r.json();
+    for (const x of j.items || []) {
+      ids.add(String(x.id));
+      if (x.skuId) skus.add(String(x.skuId));
+      if (x.title) titles.add(normTitle(x.title));
+    }
+  } catch (e) {}
+  APPLIED_IDS = ids;
+  APPLIED_TITLES = titles;
+  APPLIED_SKUS = skus;
+  return APPLIED_IDS;
+}
+
+async function loadMine(mode) {
+  const filter = mode === 'success' ? 'success' : 'applied';
+  $('trialMeta').textContent = filter === 'success' ? '正在读取已中选记录…' : '正在读取我的申请记录…';
+  $('trialList').innerHTML = '';
+  try {
+    const r = await fetch('/api/my-trials?filter=' + filter);
+    const j = await r.json();
+    if (!j.ok) {
+      $('trialMeta').textContent = j.message || '读取失败';
+      return;
+    }
+    if (!j.items.length) {
+      $('trialMeta').textContent = filter === 'success' ? '目前还没有中选的记录（中选后会显示在这里）' : '还没有申请记录';
+      return;
+    }
+    $('trialMeta').textContent = (filter === 'success' ? '已中选 ' : '我的申请 ') + j.total + ' 条（' + fmtTime(j.fetchedAt) + ' 读取）';
+    const rows = j.items
+      .map((it) => {
+        const color = it.status === 2 ? '#0a7d33' : (it.status === 3 ? '#9aa3af' : '#b45309');
+        const note = it.statusNote && it.statusNote !== it.statusText ? ' · ' + it.statusNote : '';
+        return (
+          '<tr>' +
+          '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5">' + (it.title || '-') + '</td>' +
+          '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5;font-family:Consolas,monospace">' + it.id + '</td>' +
+          '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5;color:' + color + '">' + it.statusText + note + '</td>' +
+          '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5">' + (it.applyTime || '-') + '</td>' +
+          '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5">' + (it.endTime || '-') + '</td>' +
+          '</tr>'
+        );
+      })
+      .join('');
+    $('trialList').innerHTML =
+      '<table style="width:100%;border-collapse:collapse">' +
+      '<thead><tr style="text-align:left;color:#6b7280">' +
+      '<th style="padding:6px 10px">商品</th><th style="padding:6px 10px">活动ID</th><th style="padding:6px 10px">状态</th>' +
+      '<th style="padding:6px 10px">申请时间</th><th style="padding:6px 10px">截止时间</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table>';
+  } catch (e) {
+    $('trialMeta').textContent = '读取失败：' + e.message;
+  }
+}
+
+function setTrialMode(mode) {
+  TRIAL_MODE = mode;
+  paintTabs();
+  if (mode === 'products') loadTrial();
+  else loadMine(mode);
+}
 
 async function loadTrial() {
   const cat = $('trialCat').value;
@@ -710,33 +849,44 @@ async function loadTrial() {
       $('trialList').innerHTML = '<div class="muted">没有符合条件且在架的商品</div>';
       return;
     }
+    const applied = await loadAppliedIds();
     const rows = j.items
-      .map(
-        (it) =>
+      .map((it) => {
+        const yes =
+          applied.has(String(it.id)) ||
+          (APPLIED_SKUS && it.sku && APPLIED_SKUS.has(String(it.sku))) ||
+          (APPLIED_TITLES && APPLIED_TITLES.has(normTitle(it.title)));
+        return (
           '<tr>' +
           '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5">' + (it.title || '-') + '</td>' +
           '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5;font-family:Consolas,monospace">' + it.id + '</td>' +
           '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5">¥' + (it.price ?? '-') + '</td>' +
           '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5">' + (it.applyNum ?? '-') + ' 人</td>' +
           '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5">' + (it.endTime || '-') + '</td>' +
+          '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5">' + (yes ? '<b style="color:#b45309">已申请</b>' : '<span class="muted">未申请</span>') + '</td>' +
           '<td style="padding:6px 10px;border-bottom:1px solid #eef1f5;white-space:nowrap">' +
           '<button data-copyid="' + it.id + '" style="padding:3px 8px;font-size:12px">复制ID</button> ' +
-          '<button data-applyid="' + it.id + '" style="padding:3px 8px;font-size:12px;background:#e8453c;color:#fff;border-color:#e8453c">申请</button>' +
+          (yes ? '' : '<button data-applyid="' + it.id + '" style="padding:3px 8px;font-size:12px;background:#e8453c;color:#fff;border-color:#e8453c">申请</button>') +
           '</td>' +
           '</tr>'
-      )
+        );
+      })
       .join('');
     $('trialList').innerHTML =
       '<table style="width:100%;border-collapse:collapse">' +
       '<thead><tr style="text-align:left;color:#6b7280">' +
       '<th style="padding:6px 10px">商品</th><th style="padding:6px 10px">活动ID</th><th style="padding:6px 10px">京东价</th>' +
-      '<th style="padding:6px 10px">已申请</th><th style="padding:6px 10px">截止时间</th><th style="padding:6px 10px">操作</th>' +
+      '<th style="padding:6px 10px">已申请</th><th style="padding:6px 10px">截止时间</th><th style="padding:6px 10px">状态</th><th style="padding:6px 10px">操作</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table>';
   } catch (e) {
     $('trialMeta').textContent = '读取失败：' + e.message;
   }
 }
 
+$('tabProducts').addEventListener('click', () => setTrialMode('products'));
+$('tabApplied').addEventListener('click', () => setTrialMode('applied'));
+$('tabSuccess').addEventListener('click', () => setTrialMode('success'));
+paintTabs();
 refresh();
 loadTrial();
 </script>

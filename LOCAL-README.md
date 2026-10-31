@@ -17,7 +17,7 @@
 | `get-cookie.cmd` / `tools/get-cookie.mjs` | **自动取 Cookie**：开一个专用 Edge 窗口让你扫码登录，把整套 cookie 写进 `.env` |
 | `daily.cmd` | 每日组入口，供计划任务调用 |
 | `install-schedule.cmd` / `remove-schedule.cmd` | 注册/删除 Windows 每日计划任务 |
-| `panel.cmd` / `tools/panel-server.cjs` | **本地管理面板**：浏览器里看账号/京豆/额度、点按钮跑任务、看日志、注册计划任务（第 12 节） |
+| `panel.cmd` / `tools/panel-server.cjs` | **本地管理面板**：浏览器里看账号/京豆/额度、点按钮跑任务、看日志（第 12 节） |
 | `try.cmd` / `try-phone.cmd` / `tools/try-tool.cjs` | 京东试用：抓活动页商品 → 本地签名 → 提交申请（第 11 节） |
 | `tools/analyze-deps.js` | 依赖分析小工具（看某脚本用到哪些 npm 包） |
 | `tools/check-deps.js` | 静态检查所有脚本的依赖是否装齐：`node tools/check-deps.js [--all]` |
@@ -326,7 +326,6 @@ try.cmd --cid1 9987,652              :: 按京东一级类目 id 过滤（9987=�
 | 试用商品 | **列出活动页当前在架商品（含活动 ID）**，可切「只看手机类 / 全部类目」；每行有「复制ID」「申请」；右上「一键申请全部手机」；下面的输入框可填表格里没有的 ID（App 里看到的）做定向申请 |
 | 我的申请 | 试用商品卡片顶部的三个页签：**在架商品 / 已申请 / 申请成功（已中选）**。「已申请」= 你在京东试用里的全部申请记录（商品/活动ID/状态/申请时间/截止时间）；「申请成功」只列已中选的；在架商品里申请过的会标「已申请」并隐藏「申请」按钮 |
 | 运行输出 | 后台任务实时输出（任务串行，一次一个），结束后保留退出码 |
-| 计划任务 | 一键注册/删除 `Faker3-Daily`（08:30）和 `Faker3-Try-Phone`（00:05） |
 | 日志 | 下拉选择 `logs/*.log` 直接看最近 300 行 |
 
 实现是零依赖单文件：`tools/panel-server.cjs`（Node 内置 `http` + 内嵌 HTML），不联网、不引入前端框架；

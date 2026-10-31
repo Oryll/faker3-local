@@ -260,8 +260,6 @@ function readBody(req) {
 async function apiState() {
   const cookie = cookieInfo();
   const numbers = { ...extractNumbers(), ...state.saved };
-  const dailyTask = await queryTask(TASK_NAME);
-  const tryTask = await queryTask(TRY_TASK_NAME);
   const cur = state.current;
   return {
     ok: true,
@@ -282,7 +280,6 @@ async function apiState() {
         }
       : null,
     history: state.history,
-    tasks: { daily: dailyTask, tryPhone: tryTask },
   };
 }
 
@@ -383,23 +380,6 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, name, text: tail(file, 300) });
     }
 
-    if (url.pathname === '/api/schedule' && req.method === 'POST') {
-      const body = await readBody(req);
-      const action = String(body.action || '');
-      const which = String(body.which || 'daily');
-      const name = which === 'tryPhone' ? TRY_TASK_NAME : TASK_NAME;
-      const script = which === 'tryPhone' ? 'try-phone.cmd' : 'daily.cmd';
-      const at = which === 'tryPhone' ? '00:05' : '08:30';
-      if (action === 'install') {
-        const r = await createTask(name, script, at);
-        return json(res, 200, { ok: r.ok, message: r.message || (r.ok ? `已创建计划任务 ${name}（每天 ${at}）` : '创建失败') });
-      }
-      if (action === 'remove') {
-        const r = await deleteTask(name);
-        return json(res, 200, { ok: r.ok, message: r.message || (r.ok ? `已删除计划任务 ${name}` : '删除失败') });
-      }
-      return json(res, 400, { ok: false, message: '未知操作' });
-    }
 
     if (url.pathname === '/') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
@@ -536,18 +516,6 @@ const HTML = `<!doctype html>
     <pre id="runOutput">（暂无输出）</pre>
   </div>
 
-  <div class="card full" style="margin-top:12px">
-    <h2>计划任务</h2>
-    <div class="row">
-      <span>日常 08:30：<b id="taskDaily">-</b></span>
-      <button data-task="install" data-which="daily">注册</button>
-      <button data-task="remove" data-which="daily">删除</button>
-      <span style="margin-left:16px">手机试用 00:05：<b id="taskTry">-</b></span>
-      <button data-task="install" data-which="tryPhone">注册</button>
-      <button data-task="remove" data-which="tryPhone">删除</button>
-    </div>
-    <div class="small muted" style="margin-top:8px">计划任务只在当前用户登录 Windows 时运行；改时间请直接编辑 install-schedule.cmd。</div>
-  </div>
 
   <div class="card full" style="margin-top:12px">
     <h2>日志</h2>
@@ -626,8 +594,6 @@ function render(s) {
     $('lastRunMeta').textContent = '点上面的按钮开始';
   }
 
-  $('taskDaily').innerHTML = s.tasks.daily.exists ? '<span class="badge ok">已注册</span>' : '<span class="badge gray">未注册</span>';
-  $('taskTry').innerHTML = s.tasks.tryPhone.exists ? '<span class="badge ok">已注册</span>' : '<span class="badge gray">未注册</span>';
 
   const sel = $('logSelect');
   const cur = sel.value;
@@ -684,13 +650,6 @@ document.addEventListener('click', async (ev) => {
 
   if (t.id === 'stopBtn') {
     const r = await post('/api/stop');
-    toast(r.message);
-    refresh();
-    return;
-  }
-
-  if (t.dataset.task) {
-    const r = await post('/api/schedule', { action: t.dataset.task, which: t.dataset.which });
     toast(r.message);
     refresh();
     return;

@@ -25,7 +25,7 @@
 | `run.js` / `run.cmd` / `scripts.json` | 本地运行器：读 `.env`、按分组跑、超时控制、结果汇总、写日志 |
 | `tools/compat-shim.cjs` | **兼容层**：绕过 `pt_key` 时代遗留的 `islogin` 自检，让脚本继续跑真实业务接口 |
 | `tools/get-cookie.mjs` / `get-cookie.cmd` | **自动取 Cookie**：弹一个专用 Edge 窗口扫码登录，把整套 cookie（含 HttpOnly）写进 `.env` |
-| `tools/panel-server.cjs` / `panel.cmd` | **本地管理面板**：<http://127.0.0.1:7373> 看账号/京豆/试用额度，点按钮跑任务、看日志、注册计划任务 |
+| `tools/panel-server.cjs` / `panel.cmd` | **本地管理面板**：<http://127.0.0.1:7373> 看账号/京豆/试用额度，点按钮跑任务、看日志、查看试用申请记录 |
 | `tools/try-tool.cjs` / `try.cmd` / `try-phone.cmd` | **京东试用**：解析活动页 SSR 商品数据 + 本地 h5st 签名 + 提交申请（可只申请手机类） |
 | `tools/local-h5st-server.cjs` | 本地 h5st 签名服务（试用脚本需要，自动拉起） |
 | `tools/check-deps.js` / `tools/analyze-deps.js` | 依赖检查/分析小工具 |
@@ -67,7 +67,7 @@ run.cmd --group daily
 - 账号卡：`pin`、Cookie 段数/长度、`.env` 更新时间、登录态类型（新式 / 老式）
 - 数据：当前京豆、今日变动、试用额度（已申请 / 剩余）
 - 按钮：检查账号、跑日常、跑额外、跑周末、手机试用（只看 / 申请）、刷新 Cookie（扫码）、停止
-- 实时运行输出、日志查看、计划任务一键注册/删除
+- 实时运行输出、日志查看、试用申请记录（在架/已申请/已中选）
 
 ## 常用命令
 

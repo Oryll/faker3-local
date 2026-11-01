@@ -592,6 +592,59 @@ if (require.main === module) {
     });
 }
 
+// 从浏览器 DevTools「复制响应」得到的 JSON 文本里提取试用商品（支持任意嵌套层级）
+function extractFeedItemsFromJson(text) {
+  let root;
+  try {
+    root = JSON.parse(String(text || '').trim());
+  } catch (e) {
+    throw new Error('不是合法 JSON：' + e.message);
+  }
+  const lists = [];
+  const walk = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const v of node) walk(v);
+      return;
+    }
+    if (Array.isArray(node.feedList)) lists.push(node.feedList);
+    for (const v of Object.values(node)) walk(v);
+  };
+  walk(root);
+  const now = Date.now();
+  const out = [];
+  const seen = new Set();
+  for (const list of lists) {
+    for (const f of list) {
+      const ms = String(f.mSchema || '');
+      const m = /activityId=(\d+)/.exec(ms);
+      if (!m) continue;
+      const aid = m[1];
+      if (seen.has(aid)) continue;
+      seen.add(aid);
+      const end = parseEndTime(f.endTime);
+      out.push({
+        aid,
+        sku: String(f.sku || ''),
+        title: String(f.skuTitle || f.wareName || ''),
+        brand: String(f.brandName || ''),
+        shop: String(f.shopName || ''),
+        cid1: String(f.cid1 || ''),
+        cid2: String(f.cid2 || ''),
+        supplyNum: Number(f.supplyNum || 0),
+        applyNum: Number(f.applyNum || 0),
+        jdPrice: f.jdPrice,
+        endTime: f.endTime,
+        end,
+        stock: f.skuHasStock !== false,
+        imported: true,
+        expired: end != null && end < now,
+      });
+    }
+  }
+  return out;
+}
+
 // 供管理面板读取试用商品列表
 module.exports = {
   ROOT,
@@ -599,6 +652,7 @@ module.exports = {
   CATEGORY_PRESETS,
   loadEnv,
   fetchTrialFeed,
+  extractFeedItemsFromJson,
   resolveCid1,
   cookieOf,
   loadEid,

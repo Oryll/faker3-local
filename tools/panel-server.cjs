@@ -257,6 +257,29 @@ function readBody(req) {
   });
 }
 
+const EXTRA_TRIALS_FILE = path.join(ROOT, 'logs', 'trial-extra.json');
+
+function loadExtraTrials() {
+  try {
+    const arr = JSON.parse(fs.readFileSync(EXTRA_TRIALS_FILE, 'utf8'));
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function mergeExtraTrials(newItems) {
+  const map = new Map();
+  for (const it of loadExtraTrials()) map.set(String(it.aid), it);
+  for (const it of newItems) map.set(String(it.aid), it);
+  const arr = Array.from(map.values());
+  try {
+    fs.mkdirSync(path.dirname(EXTRA_TRIALS_FILE), { recursive: true });
+    fs.writeFileSync(EXTRA_TRIALS_FILE, JSON.stringify(arr, null, 2));
+  } catch {}
+  return arr;
+}
+
 async function apiState() {
   const cookie = cookieInfo();
   const numbers = { ...extractNumbers(), ...state.saved };
@@ -332,11 +355,21 @@ const server = http.createServer(async (req, res) => {
           if (!r) return json(res, 400, { ok: false, message: '未知类目：' + cat });
           cid1s = r;
         }
-        const items = await tryTool.fetchTrialFeed(tryTool.TRIAL_URL, { cid1s, keywords: [], titleFilters: [] });
+        const ssr = await tryTool.fetchTrialFeed(tryTool.TRIAL_URL, { cid1s: [], keywords: [], titleFilters: [] });
+        const extras = loadExtraTrials();
+        const merged = [];
+        const seen = new Set();
+        for (const it of [...ssr, ...extras]) {
+          if (!it.aid || seen.has(String(it.aid))) continue;
+          seen.add(String(it.aid));
+          merged.push(it);
+        }
+        merged.sort((a, b) => a.applyNum - b.applyNum);
+        const picked = cid1s.length ? merged.filter((it) => cid1s.includes(String(it.cid1))) : merged;
         return json(res, 200, {
           ok: true,
           category: cat,
-          items: items.map((it) => ({
+          items: picked.map((it) => ({
             id: it.aid,
             title: it.title,
             brand: it.brand,
@@ -346,12 +379,25 @@ const server = http.createServer(async (req, res) => {
             applyNum: it.applyNum,
             supplyNum: it.supplyNum,
             endTime: it.endTime,
+            imported: !!it.imported,
           })),
-          total: items.length,
+          total: picked.length,
+          imported: extras.length,
           fetchedAt: Date.now(),
         });
       } catch (e) {
         return json(res, 500, { ok: false, message: '抓取失败：' + e.message });
+      }
+    }
+    if (url.pathname === '/api/trial-import' && req.method === 'POST') {
+      try {
+        const body = await readBody(req);
+        const items = tryTool.extractFeedItemsFromJson(String(body.json || ''));
+        if (!items.length) return json(res, 400, { ok: false, message: '这段 JSON 里没有找到试用商品（feedList/mSchema 字段）' });
+        const merged = mergeExtraTrials(items);
+        return json(res, 200, { ok: true, added: items.length, total: merged.length });
+      } catch (e) {
+        return json(res, 400, { ok: false, message: '导入失败：' + e.message });
       }
     }
     if (url.pathname === '/api/state') return json(res, 200, await apiState());
@@ -508,6 +554,19 @@ const HTML = `<!doctype html>
       <span class="small muted">表格里没有的商品（比如 App 里看到的），可以在这里填 ID 直接申请</span>
     </div>
     <div id="trialList" class="small" style="margin-top:10px"></div>
+    <details class="small" style="margin-top:10px">
+      <summary style="cursor:pointer;color:#5b6b7c">从浏览器导入更多商品（突破首屏 13 个限制）</summary>
+      <div style="margin-top:8px;color:#5b6b7c;line-height:1.7">
+        1) 在浏览器打开试用页 → F12/右键「检查」→ 网络(Network) → 筛选 <code>qryH5BabelFloors</code><br>
+        2) 页面往下滚动触发翻页 → 右键那条请求 → 复制 → <b>复制响应</b><br>
+        3) 把复制到的 JSON 粘贴到下面 → 点「导入」
+      </div>
+      <textarea id="importJson" placeholder="在这里粘贴 DevTools「复制响应」得到的 JSON（很长，正常）" style="width:100%;height:90px;margin-top:6px;font-size:12px;border:1px solid #cdd5df;border-radius:6px;padding:8px"></textarea>
+      <div class="row" style="margin-top:6px">
+        <button id="importBtn">导入</button>
+        <span class="small muted" id="importMsg"></span>
+      </div>
+    </details>
   </div>
 
   <div class="card full" style="margin-top:12px">
@@ -792,6 +851,22 @@ function setTrialMode(mode) {
   else loadMine(mode);
 }
 
+async function importTrials() {
+  const raw = ($('importJson') || {}).value || '';
+  if (!raw.trim()) { $('importMsg').textContent = '请先粘贴 JSON'; return; }
+  $('importMsg').textContent = '导入中…';
+  try {
+    const r = await fetch('/api/trial-import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ json: raw }) });
+    const j = await r.json();
+    if (!j.ok) { $('importMsg').textContent = j.message || '导入失败'; return; }
+    $('importMsg').textContent = '已导入 ' + j.added + ' 条，累计额外商品 ' + j.total + ' 条';
+    $('importJson').value = '';
+    loadTrial();
+  } catch (e) {
+    $('importMsg').textContent = '导入失败：' + e.message;
+  }
+}
+
 async function loadTrial() {
   const cat = $('trialCat').value;
   $('trialMeta').textContent = '正在读取活动页…';
@@ -847,6 +922,7 @@ $('tabApplied').addEventListener('click', () => setTrialMode('applied'));
 $('tabSuccess').addEventListener('click', () => setTrialMode('success'));
 paintTabs();
 refresh();
+if ($('importBtn')) $('importBtn').onclick = importTrials;
 loadTrial();
 </script>
 </body>

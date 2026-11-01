@@ -108,10 +108,14 @@ async function sign(payload) {
   const declared = String(params.appid || '');
   const rawAppId = String(payload.appId || '');
   // 签名用的 appid 必须和请求参数里的 appid 一致；payload.appId 只是上游的附加字段（可能是 35fa0 或旧 h5st 串），仅作兜底
-  const appid = /^[A-Za-z0-9_-]{2,32}$/.test(declared)
-    ? declared
-    : (/^[A-Za-z0-9_-]{2,32}$/.test(rawAppId) ? rawAppId : 'newtry');
-  const version = typeof payload.version === 'string' && /^[34]\.\d$/.test(payload.version) ? payload.version : '3.1';
+  // payload.signAppId 可强制指定（babel 楼层接口用 riskAppId=35fa0 签名，但请求参数里 appid=newtry）
+  const forced = String(payload.signAppId || '');
+  const appid = /^[A-Za-z0-9_-]{2,32}$/.test(forced)
+    ? forced
+    : (/^[A-Za-z0-9_-]{2,32}$/.test(declared)
+      ? declared
+      : (/^[A-Za-z0-9_-]{2,32}$/.test(rawAppId) ? rawAppId : 'newtry'));
+  const version = typeof payload.version === 'string' && /^[345]\.\d$/.test(payload.version) ? payload.version : '3.1';
 
   const h = new H5ST({ pin: cookiePin(payload.pin), appid, ua });
   const h5st = await h.genH5st(params, version);

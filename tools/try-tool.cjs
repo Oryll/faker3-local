@@ -364,8 +364,12 @@ async function quota(cookie) {
 async function applyOne(cookie, item) {
   const r = await jdApi(cookie, { functionId: 'try_apply', appid: 'newtry', body: { activityId: Number(item.aid) } });
   const j = r.json || {};
+  const msgText = String(j.message || j.msg || '');
+  // 京东 2026 版 try_apply 成功时可能返回 code=1 且 message="申请成功！"（不是 code=0），
+  // 所以显式把「消息里带申请成功」也算成功。
+  const ok = j.code === '0' || (j.success === true && !j.code) || /申请成功/.test(msgText);
   return {
-    ok: j.code === '0' || j.success === true && !j.code,
+    ok,
     code: j.code,
     message: j.message || j.msg || '',
     wl: r.wl,

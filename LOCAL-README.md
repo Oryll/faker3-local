@@ -310,6 +310,9 @@ try.cmd --cid1 9987,652              :: 按京东一级类目 id 过滤（9987=�
 - 每天想自动跑：`schtasks` 里再加一条 `try-phone.cmd`（建议 00:05，额度一过 0 点就重置），例如：
   `schtasks /Create /TN "Faker3-Try-Phone" /TR "\"D:\gongzuoqu\faker3-local\try-phone.cmd\"" /SC DAILY /ST 00:05 /F`
 
+> 注意：2026-11 起京东 `try_apply` 成功时可能返回 `code=1` + `message="申请成功！"`（不是 `code=0`），
+> 工具已把「消息含申请成功」判为成功；以前显示「失败」但其实已经申请上的情况不会再出现。
+
 ## 12. 管理面板（`panel.cmd`，浏览器里点鼠标）
 
 不想记命令时用这个：双击 `panel.cmd`，会自动打开浏览器到 <http://127.0.0.1:7373>（只监听本机，

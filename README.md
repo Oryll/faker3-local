@@ -51,7 +51,7 @@ get-cookie.cmd
 :: 3) 验证 Cookie：能打印出京豆/会员信息就说明有效
 check-cookie.cmd
 
-:: 4) 跑每日组（13 个脚本，约 2 分钟）
+:: 4) 跑每日组（14 个脚本，约 2 分钟）
 run.cmd --group daily
 ```
 
@@ -74,8 +74,8 @@ run.cmd --group daily
 | 命令 | 说明 |
 | --- | --- |
 | `run.cmd --list` | 列出所有分组和脚本（带中文名） |
-| `run.cmd --group daily` | 每日组（13 个） |
-| `run.cmd --group extra` | 额外组（24 个，活动类，受京东档期影响） |
+| `run.cmd --group daily` | 每日组（14 个） |
+| `run.cmd --group extra` | 额外组（30 个，活动类，受京东档期影响） |
 | `run.cmd --group weekly` | 每周组（清券） |
 | `run.cmd jd_bean_change.js` | 跑单个脚本 |
 | `run.cmd --group daily --dry-run` | 只预览不执行 |

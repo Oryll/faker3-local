@@ -17,7 +17,8 @@
       "jd_AutoEval.js",
       "jd_mall.js",
       "jd_ttgd.js",
-      "jd_qy_sign.js"
+      "jd_qy_sign.js",
+      "jd_deliverySign_sign.js"
     ],
     "weekly": [
       "jd_clean_coupon.js"
@@ -46,7 +47,13 @@
       "jd_yssign.js",
       "jd_zjindan.js",
       "jd_ksjsb.js",
-      "jd_CheckCK.js"
+      "jd_CheckCK.js",
+      "jd_XinFarm_water.js",
+      "jd_sx_draw.js",
+      "jd_xsjx.js",
+      "jd_XinFarm_draw.js",
+      "jd_dplhbshop.js",
+      "jd_jxfl.js"
     ],
     "help": [
       "jd_farmnew_ck_help.js",

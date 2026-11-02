@@ -176,11 +176,22 @@ function deleteTask(name) {
 }
 
 // ---------- 任务定义 ----------
+// 分组数量从 scripts.json 读，避免写死数字和实际脱节
+function groupCount(name) {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts.json'), 'utf8'));
+    const arr = (cfg.groups || {})[name];
+    return Array.isArray(arr) ? arr.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
 const TARGETS = {
   check: { label: '检查账号（京豆/会员/额度）', cmd: null },
-  daily: { label: '跑日常（13 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'daily']] },
-  extra: { label: '跑额外（24 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'extra']] },
-  weekend: { label: '跑周末（1 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'weekly']] },
+  daily: { label: '跑日常（' + groupCount('daily') + ' 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'daily']] },
+  extra: { label: '跑额外（' + groupCount('extra') + ' 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'extra']] },
+  weekend: { label: '跑周末（' + groupCount('weekly') + ' 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'weekly']] },
   'try-phone': { label: '试用：一键申请全部手机类', cmd: [NODE, [path.join(ROOT, 'tools', 'run-try.cjs'), '--category', 'phone']] },
   'try-aid': { label: '定向申请（填试用 ID）', cmd: null },
   'get-cookie': { label: '刷新 Cookie（弹出京东扫码）', cmd: [NODE, [path.join(ROOT, 'tools', 'get-cookie.mjs'), '--wait', '300']] },
@@ -425,6 +436,7 @@ async function apiState() {
         }
       : null,
     history: state.history,
+    groups: { daily: groupCount('daily'), extra: groupCount('extra'), weekly: groupCount('weekly') },
   };
 }
 
@@ -645,9 +657,9 @@ const HTML = `<!doctype html>
     <h2>操作</h2>
     <div class="row">
       <button class="primary" data-run="check">检查账号</button>
-      <button data-run="daily">跑日常（13 个）</button>
-      <button data-run="extra">跑额外（24 个）</button>
-      <button data-run="weekend">跑周末</button>
+      <button data-run="daily" id="btnDaily">跑日常</button>
+      <button data-run="extra" id="btnExtra">跑额外</button>
+      <button data-run="weekend" id="btnWeekend">跑周末</button>
       <button data-run="get-cookie">刷新 Cookie（扫码）</button>
       <button id="stopBtn">停止</button>
     </div>
@@ -739,6 +751,11 @@ function fmtDur(a, b) {
 function render(s) {
   state = s;
   $('updated').textContent = '更新于 ' + fmtTime(s.now);
+  if (s.groups) {
+    $('btnDaily').textContent = '跑日常（' + s.groups.daily + ' 个）';
+    $('btnExtra').textContent = '跑额外（' + s.groups.extra + ' 个）';
+    $('btnWeekend').textContent = '跑周末（' + s.groups.weekly + ' 个）';
+  }
 
   const c = s.cookie;
   $('pin').textContent = c.pin || (c.hasCookie ? '（已配置 Cookie）' : '未配置');

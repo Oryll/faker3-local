@@ -132,6 +132,7 @@ const DEFAULT_CONFIG = {
       'jd_mall.js',
       'jd_ttgd.js',
       'jd_qy_sign.js',
+      'jd_deliverySign_sign.js',
     ],
     weekly: ['jd_clean_coupon.js'],
     extra: [

@@ -115,7 +115,7 @@ function tail(file, lines) {
   try {
     const text = fs.readFileSync(file, 'utf8');
     const arr = text.split(/\r?\n/);
-    return arr.slice(-lines).join('\n');
+    return arr.slice(-lines).join('\\n');
   } catch {
     return '';
   }
@@ -214,6 +214,10 @@ async function runCheckNow() {
   }
   state.current.finishedAt = Date.now();
   state.current.output.push('[面板] 检查结束');
+  // 关键：写入 history，否则前端会走「还没有运行记录」分支，不显示输出
+  const r = state.current;
+  state.history.unshift({ id: r.id, target: r.target, label: r.label, startedAt: r.startedAt, finishedAt: r.finishedAt, exitCode: r.exitCode });
+  state.history = state.history.slice(0, 10);
 }
 
 function startTarget(target, extra = {}) {
@@ -264,7 +268,7 @@ function startTarget(target, extra = {}) {
   child.on('exit', (code) => {
     run.finishedAt = Date.now();
     run.exitCode = code;
-    const parsed = parseOutput(run.output.join('\n'));
+    const parsed = parseOutput(run.output.join('\\n'));
     saveParsed(parsed);
     state.history.unshift({ id: run.id, target: run.target, label: run.label, startedAt: run.startedAt, finishedAt: run.finishedAt, exitCode: code });
     state.history = state.history.slice(0, 10);
@@ -785,6 +789,13 @@ function render(s) {
     $('lastRunMeta').textContent = fmtTime(hist.finishedAt) + ' · 用时 ' + fmtDur(hist.startedAt, hist.finishedAt) + ' · 退出码 ' + hist.exitCode;
     $('runMeta').textContent = '上次任务已结束：' + hist.label;
     if (s.run) $('runOutput').textContent = (s.run.output || []).join('\\n') || '（暂无输出）';
+  } else if (s.run) {
+    // 任务刚结束但还没进 history（或 history 为空）时，也要把输出显示出来
+    $('lastRun').textContent = (s.run.exitCode === 0 ? '成功：' : '有失败：') + (s.run.label || '');
+    $('lastRunMeta').textContent = fmtTime(s.run.finishedAt) + ' · 用时 ' + fmtDur(s.run.startedAt, s.run.finishedAt) + ' · 退出码 ' + s.run.exitCode;
+    $('runMeta').textContent = '上次任务已结束：' + (s.run.label || '');
+    $('runOutput').textContent = (s.run.output || []).join('\\n') || '（暂无输出）';
+    $('runOutput').scrollTop = $('runOutput').scrollHeight;
   } else {
     $('lastRun').textContent = '还没有运行记录';
     $('lastRunMeta').textContent = '点上面的按钮开始';

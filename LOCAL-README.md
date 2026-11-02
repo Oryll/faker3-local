@@ -13,7 +13,7 @@
 | `run.js` | 运行器：读 `.env`、按组跑脚本、超时控制、汇总结果、写日志 |
 | `scripts.json` | 分组与间隔/超时配置，可自己改 |
 | `run.cmd` | Windows 启动入口（自动找 Node，不需要先配 PATH） |
-| `check-cookie.cmd` | 一键检测 Cookie 是否有效（跑 `jd_bean_change.js`；`jd_CheckCK.js` 在新机制下会误报，见第 9 节） |
+| `check-cookie.cmd` | 一键检查登录态 + 账号信息（京豆/会员/优惠券/白条，直接查 `api.m.jd.com`，见第 9.2 节） |
 | `get-cookie.cmd` / `tools/get-cookie.mjs` | **自动取 Cookie**：开一个专用 Edge 窗口让你扫码登录，把整套 cookie 写进 `.env` |
 | `daily.cmd` | 每日组入口，供计划任务调用 |
 | `install-schedule.cmd` / `remove-schedule.cmd` | 注册/删除 Windows 每日计划任务 |
@@ -178,7 +178,7 @@ png-js qs redis request sharp socks-proxy-agent tough-cookie tunnel
    浏览器插件导出的 cookie 串也天然缺这些 HttpOnly 字段，所以只有整套复制才有效。
 2. **`jd_CheckCK.js` 会误报「CK 已失效」**：它按老格式解析 `pt_key=` / `pt_pin=` 来判断，
    在新机制下必然判失败（实测真实有效的 cookie 也会显示「填写不规范 / 已失效」）。
-   本模板的 `check-cookie.cmd` 已改为跑 `jd_bean_change.js`（资产统计）来验证登录态 ——
+   本模板的 `check-cookie.cmd` 已改为直接查 `api.m.jd.com` 的 `GetJDUserInfoUnion` 来验证登录态 ——
    能正常打出京豆 / Plus 信息就说明 cookie 有效。
 
 实测结论（同一套新 cookie）：

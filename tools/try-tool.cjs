@@ -377,6 +377,39 @@ async function applyOne(cookie, item) {
   };
 }
 
+// ---------- 会话校验 ----------
+// 京东的「新式登录态」token 会过期（实测寿命几十分钟到几小时），
+// 但 cookie 字符串本身还在，所以本地看格式永远「有 pin + 有 thor」。
+// 只有问服务端才知道到底还有没有效：try_rafflecount 未登录时返回 code=-600。
+async function checkSession(cookie) {
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0';
+  for (const appid of ['ysas-new', 'newtry']) {
+    try {
+      const body = new URLSearchParams({ functionId: 'try_rafflecount', appid, client: 'wh5', body: '{}' }).toString();
+      const r = await fetch('https://api.m.jd.com/client.action?functionId=try_rafflecount&appid=' + appid + '&client=wh5', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie,
+          'user-agent': UA,
+          origin: 'https://prodev.m.jd.com',
+          referer: 'https://prodev.m.jd.com/',
+        },
+        body,
+      });
+      const j = await r.json().catch(() => null);
+      if (!j) continue;
+      if (String(j.code) === '0' && j.data) return { ok: true, appid };
+      const msg = String(j.message || j.msg || '');
+      if (j.code === '-600' || /请先登陆|请先登录|未登录/.test(msg)) return { ok: false, appid, message: msg || '请先登陆' };
+      return { ok: false, appid, message: msg || ('code=' + j.code) };
+    } catch (e) {
+      return { ok: false, message: '校验请求失败：' + e.message };
+    }
+  }
+  return { ok: false, message: '校验失败' };
+}
+
 // ---------- 我的试用（try_MyTrials） ----------
 const MY_STATUS_TEXT = { 0: '已申请', 1: '即将揭晓', 2: '已中选', 3: '未中选' };
 function myStatusText(status) {
@@ -658,6 +691,7 @@ module.exports = {
   loadEid,
   ensureH5stServer,
   quota,
+  checkSession,
   applyOne,
   sign,
   jdApi,

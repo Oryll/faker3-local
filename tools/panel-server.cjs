@@ -20,6 +20,7 @@ const TRY_TASK_NAME = 'Faker3-Try-Phone';
 const tryTool = require('./try-tool.cjs');
 
 const state = {
+  session: null,
   current: null, // { id, target, label, child, output: [], startedAt, finishedAt, exitCode }
   history: [],
   saved: {}, // { beans, beanChange, tryApplied, tryRemaining, updatedAt } 持久化到 logs/panel-state.json
@@ -280,14 +281,49 @@ function mergeExtraTrials(newItems) {
   return arr;
 }
 
+// 面板是长驻进程，而 try-tool 的 loadEnv() 不覆盖已存在的 process.env，
+// 所以 .env 更新（重新扫码）后必须强制同步一次，否则面板一直用旧 cookie。
+function syncEnvCookie() {
+  const { out } = readEnvFile();
+  const ck = String(out.JD_COOKIE || '');
+  if (ck) process.env.JD_COOKIE = ck;
+  return ck;
+}
+
+const SESSION_TTL = 60 * 1000;
+async function sessionState() {
+  const now = Date.now();
+  const cur = state.session;
+  if (cur && now - cur.checkedAt < SESSION_TTL) return cur;
+  let ck = '';
+  try {
+    tryTool.loadEnv();
+    ck = syncEnvCookie() || (tryTool.cookieOf().cookie || '');
+  } catch {}
+  if (!ck) {
+    state.session = { ok: false, message: '没有 JD_COOKIE', checkedAt: now };
+    return state.session;
+  }
+  let r;
+  try {
+    r = await tryTool.checkSession(ck);
+  } catch (e) {
+    r = { ok: false, message: '校验失败：' + e.message };
+  }
+  state.session = { ok: !!r.ok, message: r.message || '', checkedAt: now };
+  return state.session;
+}
+
 async function apiState() {
   const cookie = cookieInfo();
   const numbers = { ...extractNumbers(), ...state.saved };
   const cur = state.current;
+  const session = cookie.hasCookie ? await sessionState() : { ok: false, message: '没有 JD_COOKIE', checkedAt: Date.now() };
   return {
     ok: true,
     now: Date.now(),
     cookie,
+    session,
     numbers,
     logs: listLogs().slice(0, 12),
     run: cur
@@ -312,6 +348,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/my-trials') {
       try {
         tryTool.loadEnv();
+        syncEnvCookie();
         const filter = String(url.searchParams.get('filter') || 'applied');
         const { cookie, pin } = tryTool.cookieOf();
         tryTool.setPin(pin);
@@ -622,9 +659,14 @@ function render(s) {
   $('cookieMeta').textContent = c.hasCookie
     ? 'Cookie ' + c.length + ' 字符 / ' + c.segments + ' 段 / ' + c.accounts + ' 个账号 · .env ' + (c.envMtime ? fmtTime(c.envMtime) : '-')
     : '没有 .env 或 JD_COOKIE，请点「刷新 Cookie」';
-  $('cookieBadge').innerHTML = c.hasCookie
-    ? (c.fresh ? '<span class="badge ok">新式登录态（无 pt_key，正常）</span>' : (c.legacy ? '<span class="badge ok">老式 pt_key</span>' : '<span class="badge warn">格式不认识</span>'))
-    : '<span class="badge bad">未配置</span>';
+  const ss = s.session || {};
+  $('cookieBadge').innerHTML = !c.hasCookie
+    ? '<span class="badge bad">未配置</span>'
+    : (ss.ok
+        ? '<span class="badge ok">登录态有效（已服务端校验）</span>'
+        : (ss.checkedAt
+            ? '<span class="badge bad">登录态已过期，请点「刷新 Cookie」扫码</span>'
+            : '<span class="badge warn">校验中…</span>'));
 
   $('beans').textContent = s.numbers.beans == null ? '-' : s.numbers.beans + ' 豆';
   $('beanMeta').textContent = s.numbers.beans == null

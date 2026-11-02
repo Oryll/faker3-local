@@ -24,6 +24,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -110,6 +111,20 @@ class Cdp {
     });
   }
   close() { try { this.ws.close(); } catch {} }
+}
+
+const require = createRequire(import.meta.url);
+const tryTool = require('./try-tool.cjs');
+
+// 本地 profile 里的 token 可能早就过期（服务端失效），但字符串还在，
+// 所以「格式对」不等于「登录有效」。写 .env 之前先问一次服务端。
+async function verifyServerSide(line) {
+  try {
+    const r = await tryTool.checkSession(line);
+    return r;
+  } catch (e) {
+    return { ok: false, message: 'NETWORK:' + e.message };
+  }
 }
 
 const AUTH_MIN = (cookies) => {
@@ -207,7 +222,28 @@ async function main() {
     if (pin) {
       const { line, count } = dumpCookieLine(cookies);
       log('');
-      ok(`已登录：pin=${pin}`);
+      ok(`本地有登录态：pin=${pin}`);
+
+      const vs = await verifyServerSide(line);
+      if (vs.ok === false) {
+        if (String(vs.message || '').startsWith('NETWORK:')) {
+          warn(`服务端校验失败（网络问题），先按本地 cookie 处理：${vs.message.replace('NETWORK:', '')}`);
+        } else {
+          bad(`但服务端判定已失效：${vs.message || '请先登陆'}`);
+          log(`  ${C.dim}本地配置目录 .jd-profile 里存的是过期 token，直接写入 .env 只会让它继续失效。${C.reset}`);
+          log(`  ${C.dim}已清掉旧 cookie 并打开登录页，请扫码重新登录…${C.reset}`);
+          await cdp.send('Network.clearBrowserCookies', {}, sessionId).catch(() => {});
+          if (!loginTabOpened) {
+            loginTabOpened = true;
+            await cdp.send('Target.createTarget', { url: LOGIN_URL }).catch(() => {});
+          }
+          await sleep(2500);
+          continue;
+        }
+      } else {
+        ok('服务端校验通过（登录态有效）');
+      }
+
       ok(`抓到 ${count} 条 .jd.com cookie，拼成 JD_COOKIE（长度 ${line.length}）`);
       if (PRINT_ONLY) {
         log('');

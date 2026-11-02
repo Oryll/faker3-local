@@ -160,6 +160,19 @@ png-js qs redis request sharp socks-proxy-agent tough-cookie tunnel
    假包名**（混淆器生成的字符串载荷），不影响运行；`tools/check-deps.js` 已把它们排除，
    实测 60 个脚本 0 缺失依赖。
 
+## 6.9 已知仍失败的 4 个脚本（2026-11-02 实测）
+
+extra 组 30 个脚本里，下面 4 个会 exit 1，但**都不是配置问题**，是京东侧限制：
+
+| 脚本 | 报错 | 原因 |
+| --- | --- | --- |
+| `jd_xqmh.js`（新奇盲盒） | `仅限受邀用户参与！！` + `当前参与人数较多，请稍后再试!` | 活动本身限受邀，号不符合 |
+| `jd_superRedBagDraw.js`（互动游戏摇红包） | `活动才开启，请确保定时在这时间后执行` | 只在每天 19:00–19:30 开放 |
+| `jd_jxfl.js`（天天抽福利） | `获取任务失败 当前参与人数较多，请稍后再试!`（脚本自注「火爆就是黑ip了」） | 京东风控/活动火爆 |
+| `jd_ksjsb.js`（快手极速版） | 曾 `Cannot find module 'smallfawn'` | **已修**：`pnpm add smallfawn@latest socks-proxy-agent@8`，现在能跑完 |
+
+> 那 3 个活动类脚本 exit 1 是它们自己在「没拿到任务」时主动退出，runner 如实记为失败；不影响其它脚本。
+
 ## 7. 风险提醒（务必看）
 
 - Cookie（不管是最老的 `pt_key`，还是现在这套 `pin`/`thor`/`light_key`/`sdtoken`）=

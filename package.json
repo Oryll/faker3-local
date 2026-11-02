@@ -40,7 +40,8 @@
     "redis": "^4.7.0",
     "request": "2.88.2",
     "sharp": "^0.34.0",
-    "socks-proxy-agent": "6.2.1",
+    "smallfawn": "^1.2.3",
+    "socks-proxy-agent": "^8.0.5",
     "tough-cookie": "^4.1.4",
     "tunnel": "^0.0.6"
   }

@@ -62,7 +62,7 @@ faker3 本地运行器
 
   node run.js --list                        列出脚本与分组
   node run.js <脚本.js> [...]               运行指定脚本（可多个）
-  node run.js --group <组名>                运行整组（daily / weekly / extra / help / stale / tools / all）
+  node run.js --group <组名>                运行整组（daily / weekly / extra / help / tools / all）
   node run.js --group daily --dry-run       预览，不执行
 
 可选参数：
@@ -166,14 +166,6 @@ const DEFAULT_CONFIG = {
       'jd_fish_help.js',
       'jd_plantBean_help.js',
       'jd_sx_help.js',
-    ],
-    stale: [
-      'jd_dplh0408.js',
-      'jd_dplh0420.js',
-      'jd_dplh0509.js',
-      'jd_dplh0523.js',
-      'jd_dplh0609.js',
-      'jd_lhgz0408.js',
     ],
     tools: ['jd_indeps.js', 'jd_autock.js', 'jd_proxy_check.js'],
     // 需要额外服务/参数的脚本：jd_try.js 需要 H5ST_SERVER

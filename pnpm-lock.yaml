@@ -74,9 +74,12 @@ importers:
       sharp:
         specifier: ^0.34.0
         version: 0.34.5
+      smallfawn:
+        specifier: ^1.2.3
+        version: 1.2.3
       socks-proxy-agent:
-        specifier: 6.2.1
-        version: 6.2.1
+        specifier: ^8.0.5
+        version: 8.0.5
       tough-cookie:
         specifier: ^4.1.4
         version: 4.1.4
@@ -914,13 +917,16 @@ packages:
   simple-wcswidth@1.1.2:
     resolution: {integrity: sha512-j7piyCjAeTDSjzTSQ7DokZtMNwNlEAyxqSZeCS+CXH7fJ4jx3FuJ/mTW3mE+6JLs4VJBbcll0Kjn+KXI5t21Iw==}
 
+  smallfawn@1.2.3:
+    resolution: {integrity: sha512-Idj07ZQBQz7Wd99xHPm0ipgEqIYQW1iqGaMEceXpIUKO8zueK8sssKfyQW9sgyC/84xSBhyexseMxfbDE9gdzg==}
+
   smart-buffer@4.2.0:
     resolution: {integrity: sha512-94hK0Hh8rPqQl2xXc3HsaBoOXKV20MToPkcXvwbISWLEs+64sBq5kFgn2kJDHb1Pry9yrP0dxrCI9RRci7RXKg==}
     engines: {node: '>= 6.0.0', npm: '>= 3.0.0'}
 
-  socks-proxy-agent@6.2.1:
-    resolution: {integrity: sha512-a6KW9G+6B3nWZ1yB8G7pJwL3ggLy1uTzKAgCb7ttblwqdz9fMGJUuTy3uFzEP48FAs9FLILlmzDlE2JJhVQaXQ==}
-    engines: {node: '>= 10'}
+  socks-proxy-agent@8.0.5:
+    resolution: {integrity: sha512-HehCEsotFqbPW9sJ8WVYB6UbmIMv7kUUORIF2Nncq4VQvBfNBLibW9YZR5dlYCSUhwcD628pRllm7n+E+YTzJw==}
+    engines: {node: '>= 14'}
 
   socks@2.8.10:
     resolution: {integrity: sha512-e0VyvkVTwVYViNovRkZ9aodhxVlyoMn7eJhVUPxZ+eK9P/7CBkxvvsBOHqFPEH416726W8tLXXXjKwqgTErrCQ==}
@@ -1895,11 +1901,13 @@ snapshots:
 
   simple-wcswidth@1.1.2: {}
 
+  smallfawn@1.2.3: {}
+
   smart-buffer@4.2.0: {}
 
-  socks-proxy-agent@6.2.1:
+  socks-proxy-agent@8.0.5:
     dependencies:
-      agent-base: 6.0.2
+      agent-base: 7.1.4
       debug: 4.4.3
       socks: 2.8.10
     transitivePeerDependencies:

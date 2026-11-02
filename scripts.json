@@ -62,14 +62,6 @@
       "jd_plantBean_help.js",
       "jd_sx_help.js"
     ],
-    "stale": [
-      "jd_dplh0408.js",
-      "jd_dplh0420.js",
-      "jd_dplh0509.js",
-      "jd_dplh0523.js",
-      "jd_dplh0609.js",
-      "jd_lhgz0408.js"
-    ],
     "tools": [
       "jd_indeps.js",
       "jd_autock.js",

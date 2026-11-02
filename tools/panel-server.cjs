@@ -21,6 +21,7 @@ const tryTool = require('./try-tool.cjs');
 
 const state = {
   session: null,
+  live: null,
   current: null, // { id, target, label, child, output: [], startedAt, finishedAt, exitCode }
   history: [],
   saved: {}, // { beans, beanChange, tryApplied, tryRemaining, updatedAt } 持久化到 logs/panel-state.json
@@ -314,16 +315,41 @@ async function sessionState() {
   return state.session;
 }
 
+// 面板京豆/额度以前只靠解析日志，我手动跑脚本时日志不走面板 → 显示会过期。
+// 这里直接问一次接口（60 秒缓存，顺带签一次名，用完就把临时签名服务关掉）。
+async function liveQuota() {
+  const now = Date.now();
+  if (state.live && now - state.live.checkedAt < SESSION_TTL) return state.live;
+  let out = null;
+  try {
+    syncEnvCookie();
+    const { cookie } = tryTool.cookieOf();
+    if (cookie) {
+      const srv = await tryTool.ensureH5stServer();
+      try {
+        const q = await tryTool.quota(cookie);
+        if (q) out = { applied: Number(q.applyNum), remain: Number(q.remainingNum), checkedAt: now };
+      } finally {
+        for (const pr of srv.procs) { try { pr.kill(); } catch {} }
+      }
+    }
+  } catch {}
+  state.live = out || { applied: null, remain: null, checkedAt: now };
+  return state.live;
+}
+
 async function apiState() {
   const cookie = cookieInfo();
   const numbers = { ...extractNumbers(), ...state.saved };
   const cur = state.current;
   const session = cookie.hasCookie ? await sessionState() : { ok: false, message: '没有 JD_COOKIE', checkedAt: Date.now() };
+  const live = cookie.hasCookie ? await liveQuota() : null;
   return {
     ok: true,
     now: Date.now(),
     cookie,
     session,
+    live,
     numbers,
     logs: listLogs().slice(0, 12),
     run: cur
@@ -673,10 +699,13 @@ function render(s) {
     ? '还没有京豆日志，点「检查账号」'
     : '变动 ' + (s.numbers.beanChange == null ? '-' : s.numbers.beanChange) + ' 豆 · ' + (s.numbers.beanLog || '');
 
-  $('quota').textContent = s.numbers.tryRemaining == null ? '-' : ('剩余 ' + s.numbers.tryRemaining + ' 次');
-  $('quotaMeta').textContent = s.numbers.tryApplied == null
+  const lv = s.live || {};
+  const remain = lv.remain != null ? lv.remain : s.numbers.tryRemaining;
+  const applied = lv.applied != null ? lv.applied : s.numbers.tryApplied;
+  $('quota').textContent = remain == null ? '-' : ('剩余 ' + remain + ' 次');
+  $('quotaMeta').textContent = applied == null
     ? '还没有试用日志'
-    : '今日已申请 ' + s.numbers.tryApplied + ' 次 · ' + (s.numbers.tryLog || '');
+    : '今日已申请 ' + applied + ' 次 · ' + (lv.applied != null ? '实时查询' : (s.numbers.tryLog || ''));
 
   const hist = s.history && s.history[0];
   if (s.run && s.run.running) {

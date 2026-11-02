@@ -177,7 +177,7 @@ function deleteTask(name) {
 
 // ---------- 任务定义 ----------
 const TARGETS = {
-  check: { label: '检查账号（京豆/会员）', cmd: [NODE, [path.join(ROOT, 'run.js'), 'jd_bean_change.js']] },
+  check: { label: '检查账号（京豆/会员/额度）', cmd: null },
   daily: { label: '跑日常（13 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'daily']] },
   extra: { label: '跑额外（24 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'extra']] },
   weekend: { label: '跑周末（1 个）', cmd: [NODE, [path.join(ROOT, 'run.js'), '--group', 'weekly']] },
@@ -186,12 +186,48 @@ const TARGETS = {
   'get-cookie': { label: '刷新 Cookie（弹出京东扫码）', cmd: [NODE, [path.join(ROOT, 'tools', 'get-cookie.mjs'), '--wait', '300']] },
 };
 
+async function runCheckNow() {
+  const id = Date.now();
+  const startedAt = Date.now();
+  state.current = { id, target: 'check', label: '检查账号（京豆/会员/额度）', startedAt, finishedAt: null, exitCode: null, output: [] };
+  const push = (line) => { if (state.current) state.current.output.push(line); };
+  push('正在向京东查询账号信息…');
+  try {
+    const live = await liveAccount();
+    const sess = await sessionState();
+    if (live && live.beans != null) {
+      push('【账号】' + (live.pin || '') + (live.isRealName ? '（已实名）' : ''));
+      push('【会员】' + (live.isPlus ? 'PLUS会员' : (live.level || '普通')) + (live.level ? ' / ' + live.level : ''));
+      push('【京豆】' + live.beans + ' 豆');
+      push('【优惠券】' + (live.coupons == null ? '-' : live.coupons + ' 张') + '　【红包】' + (live.redBalance == null ? '-' : live.redBalance + ' 元'));
+      push('【白条】可用额度 ' + (live.baitiaoLimit == null ? '-' : live.baitiaoLimit) + ' 元 / 未还 ' + (live.baitiaoUnpaid == null ? '-' : live.baitiaoUnpaid) + ' 元');
+    } else {
+      push('查询失败：' + ((live && live.error) || '未知原因'));
+    }
+    if (live && live.remain != null) push('【试用额度】今日已申请 ' + live.applied + ' 次 / 剩余 ' + live.remain + ' 次');
+    push('【登录态】' + (sess.ok ? '有效（服务端已校验）' : '已过期：' + (sess.message || '')));
+    push('完成。');
+    state.current.exitCode = live && live.beans != null ? 0 : 1;
+  } catch (e) {
+    push('出错：' + e.message);
+    state.current.exitCode = 1;
+  }
+  state.current.finishedAt = Date.now();
+  state.current.output.push('[面板] 检查结束');
+}
+
 function startTarget(target, extra = {}) {
   if (state.current && state.current.finishedAt == null) {
     return { ok: false, message: '已有任务在跑，先等它结束或点「停止」' };
   }
   const def = TARGETS[target];
   if (!def) return { ok: false, message: '未知任务：' + target };
+  if (target === 'check') {
+    state.session = null;
+    state.live = null;
+    runCheckNow();
+    return { ok: true, id: Date.now(), direct: true };
+  }
   let cmd;
   if (target === 'try-aid') {
     const aid = String(extra.aid || '').trim();
@@ -316,26 +352,46 @@ async function sessionState() {
 }
 
 // 面板京豆/额度以前只靠解析日志，我手动跑脚本时日志不走面板 → 显示会过期。
-// 这里直接问一次接口（60 秒缓存，顺带签一次名，用完就把临时签名服务关掉）。
-async function liveQuota() {
+// 这里直接问一次接口（60 秒缓存）。
+async function liveAccount() {
   const now = Date.now();
   if (state.live && now - state.live.checkedAt < SESSION_TTL) return state.live;
-  let out = null;
+  const out = { checkedAt: now };
   try {
     syncEnvCookie();
     const { cookie } = tryTool.cookieOf();
     if (cookie) {
+      const acc = await tryTool.fetchAccountInfo(cookie);
+      if (acc && acc.ok) {
+        Object.assign(out, {
+          pin: acc.pin || '',
+          beans: acc.beans,
+          level: acc.level,
+          isPlus: acc.isPlus,
+          isRealName: acc.isRealName,
+          coupons: acc.coupons,
+          redBalance: acc.redBalance,
+          baitiaoLimit: acc.baitiaoLimit,
+          baitiaoUnpaid: acc.baitiaoUnpaid,
+          source: 'api',
+        });
+      } else if (acc) {
+        out.error = acc.message;
+      }
       const srv = await tryTool.ensureH5stServer();
       try {
         const q = await tryTool.quota(cookie);
-        if (q) out = { applied: Number(q.applyNum), remain: Number(q.remainingNum), checkedAt: now };
+        if (q) {
+          out.applied = Number(q.applyNum);
+          out.remain = Number(q.remainingNum);
+        }
       } finally {
         for (const pr of srv.procs) { try { pr.kill(); } catch {} }
       }
     }
   } catch {}
-  state.live = out || { applied: null, remain: null, checkedAt: now };
-  return state.live;
+  state.live = out;
+  return out;
 }
 
 async function apiState() {
@@ -343,7 +399,7 @@ async function apiState() {
   const numbers = { ...extractNumbers(), ...state.saved };
   const cur = state.current;
   const session = cookie.hasCookie ? await sessionState() : { ok: false, message: '没有 JD_COOKIE', checkedAt: Date.now() };
-  const live = cookie.hasCookie ? await liveQuota() : null;
+  const live = cookie.hasCookie ? await liveAccount() : null;
   return {
     ok: true,
     now: Date.now(),
@@ -694,10 +750,20 @@ function render(s) {
             ? '<span class="badge bad">登录态已过期，请点「刷新 Cookie」扫码</span>'
             : '<span class="badge warn">校验中…</span>'));
 
-  $('beans').textContent = s.numbers.beans == null ? '-' : s.numbers.beans + ' 豆';
-  $('beanMeta').textContent = s.numbers.beans == null
-    ? '还没有京豆日志，点「检查账号」'
-    : '变动 ' + (s.numbers.beanChange == null ? '-' : s.numbers.beanChange) + ' 豆 · ' + (s.numbers.beanLog || '');
+  const lv0 = s.live || {};
+  const beans = lv0.beans != null ? lv0.beans : s.numbers.beans;
+  $('beans').textContent = beans == null ? '-' : beans + ' 豆';
+  if (lv0.beans != null) {
+    const bits = [];
+    if (lv0.level) bits.push(lv0.level);
+    if (lv0.isPlus) bits.push('PLUS会员');
+    if (lv0.coupons != null) bits.push('优惠券 ' + lv0.coupons + ' 张');
+    $('beanMeta').textContent = bits.join(' · ') + ' · 实时查询';
+  } else {
+    $('beanMeta').textContent = s.numbers.beans == null
+      ? '还没有京豆日志，点「检查账号」'
+      : '变动 ' + (s.numbers.beanChange == null ? '-' : s.numbers.beanChange) + ' 豆 · ' + (s.numbers.beanLog || '');
+  }
 
   const lv = s.live || {};
   const remain = lv.remain != null ? lv.remain : s.numbers.tryRemaining;

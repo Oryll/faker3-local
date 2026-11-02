@@ -377,6 +377,41 @@ async function applyOne(cookie, item) {
   };
 }
 
+// ---------- 账号信息（京豆/会员/优惠券） ----------
+// 上游 jd_bean_change.js 走的是老接口（me-api TotalBean），新登录态下 403/401，
+// 所以显示「获取失败」。api.m.jd.com 的 GetJDUserInfoUnion 认新 cookie，返回真实数据。
+async function fetchAccountInfo(cookie) {
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0';
+  try {
+    const r = await fetch('https://api.m.jd.com/client.action?functionId=GetJDUserInfoUnion&appid=jd-cphdeveloper-m&client=wh5', {
+      headers: { cookie, 'user-agent': UA, referer: 'https://home.m.jd.com/' },
+    });
+    const j = await r.json();
+    if (String(j.retcode) !== '0') return { ok: false, message: j.msg || ('retcode=' + j.retcode) };
+    const d = j.data || {};
+    const ui = d.userInfo || {};
+    const bi = ui.baseInfo || {};
+    const ai = d.assetInfo || {};
+    const bt = ai.baitiaoInfo || {};
+    return {
+      ok: true,
+      pin: bi.curPin || bi.alias || '',
+      nickname: bi.nickname || '',
+      level: bi.levelName || '',
+      isPlus: String(ui.isPlusVip) === '1',
+      isRealName: String(ui.isRealNameAuth) === '1',
+      beans: ai.beanNum == null ? null : Number(ai.beanNum),
+      coupons: ai.couponNum == null ? null : Number(ai.couponNum),
+      redBalance: ai.redBalance == null ? null : Number(ai.redBalance),
+      balance: ai.accountBalance == null ? null : Number(ai.accountBalance),
+      baitiaoLimit: bt.availableLimit == null ? null : Number(bt.availableLimit),
+      baitiaoUnpaid: bt.unpaidForAll == null ? null : Number(bt.unpaidForAll),
+    };
+  } catch (e) {
+    return { ok: false, message: e.message };
+  }
+}
+
 // ---------- 会话校验 ----------
 // 京东的「新式登录态」token 会过期（实测寿命几十分钟到几小时），
 // 但 cookie 字符串本身还在，所以本地看格式永远「有 pin + 有 thor」。
@@ -509,6 +544,21 @@ async function main() {
   if (cid1s.length) log(`类目过滤：cid1 = ${cid1s.join(',')}${categoryArg.length ? `（${categoryArg.join(',')}）` : ''}`);
   if (keywords.length) log(`关键词过滤：${keywords.join(',')}（匹配标题/品牌/店铺）`);
   await loadEid(cookie);
+
+  // 账号信息：--account 直接查京豆/会员/优惠券（绕开上游老接口）
+  if (argv.includes('--account')) {
+    const { cookie } = cookieOf();
+    const sess = await checkSession(cookie);
+    const acc = await fetchAccountInfo(cookie);
+    if (!acc.ok) { log('查询失败：' + acc.message); return 1; }
+    log(`【账号】${acc.pin}${acc.isRealName ? '（已实名）' : ''}`);
+    log(`【会员】${acc.isPlus ? 'PLUS会员' : '普通'} / ${acc.level}`);
+    log(`【京豆】${acc.beans} 豆`);
+    log(`【优惠券】${acc.coupons} 张　【红包】${acc.redBalance} 元`);
+    log(`【白条】可用 ${acc.baitiaoLimit} 元 / 未还 ${acc.baitiaoUnpaid} 元`);
+    log(`【登录态】${sess.ok ? '有效' : '已过期：' + (sess.message || '')}`);
+    return acc.ok ? 0 : 1;
+  }
 
   // 我的试用：--my-trials 列出已申请/中选情况（--selected 0|1|2|3|all，默认 all）
   if (argv.includes('--my-trials')) {
@@ -692,6 +742,7 @@ module.exports = {
   ensureH5stServer,
   quota,
   checkSession,
+  fetchAccountInfo,
   applyOne,
   sign,
   jdApi,
